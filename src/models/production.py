@@ -55,9 +55,29 @@ class ProductionRecord(BaseModel):
             # A value was provided but it's not in the correct format.
             raise ValueError(f"Date format for '{value}' is incorrect, expected YYYYMMDD.")
 
-    @field_validator('storage_location', 'wbs_element', 'sales_order_number', 'sales_order_item_number', mode='before')
+    @field_validator('storage_location', 'wbs_element', mode='before')
     @classmethod
     def empty_str_to_none(cls, value):
         if isinstance(value, str) and value.strip() == '':
             return None
         return value
+
+    @field_validator('sales_order_number', 'sales_order_item_number', mode='before')
+    @classmethod
+    def clean_sap_numbers(cls, value):
+        """空文字列をNoneに変換し、先頭のゼロを削除する。"""
+        if not isinstance(value, str):
+            return value
+
+        # Trim whitespace first
+        stripped_val = value.strip()
+
+        if stripped_val == '':
+            return None
+
+        # If it's a numeric string, strip leading zeros
+        if stripped_val.isdigit():
+            return stripped_val.lstrip('0') or '0'
+
+        # Return original stripped value if not purely numeric (e.g., 'I-0310937-20')
+        return stripped_val

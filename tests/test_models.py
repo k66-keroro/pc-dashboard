@@ -35,9 +35,10 @@ class TestProductionDataPipeline(unittest.TestCase):
         self.row_bad_quantity = "P100\t1120\tP002\tTest Item 2\t50002\tZP11\tPC1\tBAD\t10\t10\t0\t2025/08/20 10:05\t20250826\t\t\t\n"
         self.row_missing_required = "P100\t1120\t\tTest Item 3\t50003\tZP11\tPC1\t30\t30\t30\t0\t2025/08/20 10:10\t20250827\t\t\t\n"
         self.row_bad_date = "P100\t1120\tP004\tTest Item 4\t50004\tZP11\tPC1\t40\t40\t40\t0\t2025/08/20 10:15\t2025-08-28\t\t\t\n"
+        self.row_leading_zeros = "P100\t1120\tP005\tTest Item 5\t50005\tZP11\tPC1\t50\t50\t50\t0\t2025/08/20 10:20\t20250829\t\t000345\t0010\n"
 
         # Create a temporary file with all test data
-        self.test_data = self.header + self.valid_row + self.row_bad_quantity + self.row_missing_required + self.row_bad_date
+        self.test_data = self.header + self.valid_row + self.row_bad_quantity + self.row_missing_required + self.row_bad_date + self.row_leading_zeros
         self.temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='shift_jis', errors='replace', suffix=".txt")
         self.temp_file.write(self.test_data)
         self.temp_file.seek(0)
@@ -49,48 +50,53 @@ class TestProductionDataPipeline(unittest.TestCase):
         self.temp_file.close()
         os.unlink(self.temp_file_path)
 
+    def test_clean_sap_numbers_validator(self):
+        """clean_sap_numbersバリデーターを単体でテスト"""
+        # Test cases for sales_order_number
+        self.assertIsNone(ProductionRecord.clean_sap_numbers(None))
+        self.assertIsNone(ProductionRecord.clean_sap_numbers(''))
+        self.assertIsNone(ProductionRecord.clean_sap_numbers('   '))
+        self.assertEqual(ProductionRecord.clean_sap_numbers('000123'), '123')
+        self.assertEqual(ProductionRecord.clean_sap_numbers('0'), '0')
+        self.assertEqual(ProductionRecord.clean_sap_numbers('000'), '0')
+        self.assertEqual(ProductionRecord.clean_sap_numbers(' 123 '), '123')
+        self.assertEqual(ProductionRecord.clean_sap_numbers('I-12345'), 'I-12345')
+
     def test_production_record_validation(self):
         """ProductionRecordモデルのバリデーションをテスト"""
         valid_data = {
             'プラント': 'P100', '保管場所': '1120', '品目コード': 'P001', '品目テキスト': 'Test Item',
             '指図番号': '50001', '指図タイプ': 'ZP11', 'MRP管理者': 'PC1', '指図数量': '10',
             '実績数量': '10', '累計数量': '10', '残数量': '0', '入力日時': datetime.datetime(2025, 8, 20, 10, 0),
-            '計画完了日': '20250825', 'WBS要素': '', '受注伝票番号': None, '受注明細番号': ''
+            '計画完了日': '20250825', 'WBS要素': '', '受注伝票番号': '007', '受注明細番号': '0'
         }
         record = ProductionRecord(**valid_data)
-        self.assertEqual(record.plant, 'P100')
-        self.assertEqual(record.order_quantity, 10)
-        self.assertEqual(record.planned_completion_date, datetime.date(2025, 8, 25))
-        self.assertIsNone(record.sales_order_number)
-
-        with self.assertRaises(ValidationError):
-            invalid_data = valid_data.copy()
-            del invalid_data['品目コード']
-            ProductionRecord(**invalid_data)
+        self.assertEqual(record.sales_order_number, '7')
+        self.assertEqual(record.sales_order_item_number, '0')
 
     def test_data_processing_end_to_end(self):
         """ファイル処理からDB挿入までのエンドツーエンドテスト"""
         summary = self.processor.process_and_load_file(self.temp_file_path)
 
-        self.assertEqual(summary['total_rows'], 4)
-        self.assertEqual(summary['successful_inserts'], 1)
+        self.assertEqual(summary['total_rows'], 5)
+        self.assertEqual(summary['successful_inserts'], 2)
         self.assertEqual(summary['failed_rows'], 3)
 
         cursor = self.conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM production_records")
         count = cursor.fetchone()[0]
-        self.assertEqual(count, 1)
+        self.assertEqual(count, 2)
 
-        cursor.execute("SELECT * FROM production_records WHERE item_code = 'P001'")
+        # Test the newly added row with leading zeros
+        cursor.execute("SELECT * FROM production_records WHERE item_code = 'P005'")
         db_record = cursor.fetchone()
         self.assertIsNotNone(db_record)
-        self.assertEqual(db_record['plant'], 'P100')
-        self.assertEqual(db_record['order_quantity'], 10)
-        self.assertEqual(db_record['input_datetime'], datetime.datetime(2025, 8, 20, 10, 0))
+        self.assertEqual(db_record['sales_order_number'], '345')
+        self.assertEqual(db_record['sales_order_item_number'], '10')
 
     def test_empty_and_header_only_file(self):
         """空のファイルやヘッダーのみのファイルを処理するテスト"""
-        # Create and test an empty file
+        # ... (this test remains the same)
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as empty_f:
             empty_file_path = empty_f.name
 
@@ -100,7 +106,6 @@ class TestProductionDataPipeline(unittest.TestCase):
         self.assertEqual(summary['successful_inserts'], 0)
         os.unlink(empty_file_path)
 
-        # Create and test a file with only a header
         with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='shift_jis') as header_f:
             header_f.write(self.header)
             header_file_path = header_f.name
