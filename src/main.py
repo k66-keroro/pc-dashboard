@@ -10,6 +10,7 @@ import logging
 # Let's rely on running it as a module for now.
 from src.models.database import get_db_connection, create_tables
 from src.core.data_processor import DataProcessor
+from src.core.analytics import ProductionAnalytics
 from src.config import settings
 from src.utils.logging_config import setup_logging
 
@@ -62,20 +63,18 @@ def main():
         logger.info("========================================")
 
         if summary.get('successful_inserts', 0) > 0:
-            logger.info("受注伝票番号の先頭ゼロが除去されたデータのプレビュー:")
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT order_number, item_text, sales_order_number, sales_order_item_number
-                FROM production_records
-                WHERE order_number IN ('30031909', '30031913');
-            """)
-            results = cursor.fetchall()
-            if results:
-                for row in results:
-                    logger.info(f"  - 指図: {row['order_number']}, 品名: {row['item_text']}, "
-                                f"受注伝票: {row['sales_order_number']}, 明細: {row['sales_order_item_number']}")
+            # 7. 分析処理の実行と結果表示
+            logger.info("========== 生産実績サマリー ==========")
+            analytics = ProductionAnalytics(conn)
+            analytics_summary = analytics.get_summary()
+            if analytics_summary:
+                logger.info(f"  総レコード数: {analytics_summary.get('record_count')}")
+                logger.info(f"  総計画数量: {analytics_summary.get('total_order_quantity'):,}")
+                logger.info(f"  総実績数量: {analytics_summary.get('total_actual_quantity'):,}")
+                logger.info(f"  全体達成率: {analytics_summary.get('achievement_rate')}%")
             else:
-                logger.info("-> 確認用の特定データが見つかりませんでした。")
+                logger.warning("分析サマリーの生成に失敗しました。")
+            logger.info("========================================")
 
     except Exception as e:
         logger.critical(f"パイプラインの実行中に致命的なエラーが発生しました: {e}", exc_info=True)

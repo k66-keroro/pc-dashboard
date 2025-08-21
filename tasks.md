@@ -10,8 +10,8 @@
 - [x] `logging` 設定を `settings.py` から読み込むように変更し、ログファイルに出力する
 
 ### P2: 分析機能の実装
-- [ ] 分析機能の基盤となる `src/core/analytics.py` を作成する
-- [ ] 生産実績分析クラス (`ProductionAnalytics`) を実装する (計画 vs 実績)
+- [x] 分析機能の基盤となる `src/core/analytics.py` を作成する
+- [x] 生産実績分析クラス (`ProductionAnalytics`) を実装する (計画 vs 実績)
 - [ ] エラー検出クラス (`ErrorDetection`) を実装する (マスタ不備チェックなど)
 - [ ] 在庫滞留分析クラス (`InventoryAnalysis`) を実装する
 
