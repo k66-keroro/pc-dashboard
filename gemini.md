@@ -43,7 +43,8 @@ python src/main.py
   - 「`ProductionRecord` モデルの `order_quantity` を必須項目から任意項目に変更してください。」
 
 - **データ処理ロジックの変更**
-  - 「`src/core/data_processor.py` で、`item_text` が空のレコードはエラーとして処理するように変更してください。」
+  - 「`src/core/data_processor.py` で、`item_text` が空のレコードはエラーとして処理するように変更してください。
+」
   - 「現在、`main.py` は実行のたびにDBを削除します。これを、データを追記する方式に変更してください。」
 
 - **新しい機能の追加**
@@ -53,12 +54,14 @@ python src/main.py
 ### 調査・分析の依頼
 
 - **データ内容の確認**
-  - 「データベースの `production_records` テーブルから、`order_type` が 'RE' のレコードを全て取得して表示してください。」
+  - 「データベースの `production_records` テーブルから、`order_type` が 'RE' のレコードを全て取得して表示してく
+ださい。」
   - 「`KANSEI_JISSEKI.txt` の中で、`計画完了日` が不正なフォーマットになっている行がないか調べてください。」
 
 ### テストコードの作成
 
-- 「`src/core/data_processor.py` の `_load_and_clean_dataframe` メソッドに対するテストを `tests/` ディレクトリに作成してください。」
+- 「`src/core/data_processor.py` の `_load_and_clean_dataframe` メソッドに対するテストを `test
+s/` ディレクトリに作成してください。」
 - 「`Pydantic` のバリデーションが失敗するような、不正なデータパターンを含むテストケースを追加してください。」
 
 ---

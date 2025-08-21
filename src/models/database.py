@@ -3,16 +3,14 @@ from pathlib import Path
 from typing import List
 
 from src.models.production import ProductionRecord
+from src.config import settings
 
-# データベースファイルのデフォルトパス
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "sqlite" / "production.db"
-
-def get_db_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+def get_db_connection(db_path: Path = settings.DB_PATH) -> sqlite3.Connection:
     """
     SQLiteデータベースへの接続を確立し、Connectionオブジェクトを返す。
     データベースファイルが存在しない場合は、親ディレクトリを作成してから接続する。
     """
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    # The directory creation is now handled in settings.py
     conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
     return conn

@@ -8,8 +8,7 @@ from pydantic import ValidationError
 from src.models.production import ProductionRecord
 from src.models.database import insert_production_records
 
-# ロギング設定
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class DataProcessor:
     """

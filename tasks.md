@@ -5,9 +5,9 @@
 ## バックログ (未着手タスク)
 
 ### P1: 基本機能の実装
-- [ ] `src/config/settings.py` を作成し、ファイルパスやDB設定を管理する
-- [ ] `main.py` のDB初期化ロジックを、毎回削除するのではなく、引数で制御可能にする
-- [ ] `logging` 設定を `settings.py` から読み込むように変更し、ログファイルに出力する
+- [x] `src/config/settings.py` を作成し、ファイルパスやDB設定を管理する
+- [x] `main.py` のDB初期化ロジックを、毎回削除するのではなく、引数で制御可能にする
+- [x] `logging` 設定を `settings.py` から読み込むように変更し、ログファイルに出力する
 
 ### P2: 分析機能の実装
 - [ ] 分析機能の基盤となる `src/core/analytics.py` を作成する
@@ -23,8 +23,6 @@
 - [ ] エラーデータを表示する専用ページを作成する
 
 ### P4: テストと品質向上
-- [ ] `src/core/data_processor.py` の単体テストを作成する
-- [ ] 不正なデータを含むテストファイルを用意し、バリデーションエラーのテストケースを追加する
 - [ ] `src/core/analytics.py` の各分析機能に対する単体テストを作成する
 
 ### P5: その他
@@ -41,3 +39,5 @@
 - [x] `database.py` でのDB接続とテーブル作成処理の実装
 - [x] `main.py` での基本的なETLパイプラインの実装
 - [x] `gemini.md`, `design.md`, `requirements.md`, `tasks.md` の作成
+- [x] `data_processor` と `database` の動作を検証する単体・統合テスト (`tests/test_models.py`) の作成
+- [x] 不正なデータ（型エラー、必須項目欠損など）を含むテストケースの追加
