@@ -27,7 +27,6 @@ def main():
     # 既存のデータベースをクリーンアップするか選択
     if os.path.exists(db_path):
         print(f"既存のデータベースファイルが見つかりました: {db_path}")
-        # 本番環境ではこのロジックをより安全なものにすべき
         # このサンプルでは、常にクリーンな状態で開始するためにファイルを削除する
         print("クリーンな状態で開始するために、既存のデータベースを削除します。")
         os.remove(db_path)
@@ -55,12 +54,21 @@ def main():
         print("=" * 40)
 
         if summary.get('successful_inserts', 0) > 0:
-            # 挿入されたデータの一部をプレビュー
-            print("\nデータベースに挿入されたデータのプレビュー (最初の5件):")
+            # 変更が確認できるよう、受注伝票番号が存在するデータをプレビュー
+            print("\n受注伝票番号の先頭ゼロが除去されたデータのプレビュー:")
             cursor = conn.cursor()
-            cursor.execute("SELECT order_number, item_code, item_text, input_datetime FROM production_records LIMIT 5;")
-            for row in cursor.fetchall():
-                print(f"  - 指図番号: {row['order_number']}, 品目: {row['item_code']}, 入力日時: {row['input_datetime']}")
+            cursor.execute("""
+                SELECT order_number, item_text, sales_order_number, sales_order_item_number
+                FROM production_records
+                WHERE order_number IN ('30031909', '30031913');
+            """)
+            results = cursor.fetchall()
+            if results:
+                for row in results:
+                    print(f"  - 指図: {row['order_number']}, 品名: {row['item_text']}, "
+                          f"受注伝票: {row['sales_order_number']}, 明細: {row['sales_order_item_number']}")
+            else:
+                print("  -> 確認用の特定データが見つかりませんでした。")
 
     except Exception as e:
         print(f"\nパイプラインの実行中に致命的なエラーが発生しました: {e}")
