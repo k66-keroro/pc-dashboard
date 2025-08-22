@@ -10,7 +10,7 @@ import logging
 # Let's rely on running it as a module for now.
 from src.models.database import get_db_connection, create_tables
 from src.core.data_processor import DataProcessor
-from src.core.analytics import ProductionAnalytics
+from src.core.analytics import ProductionAnalytics, ErrorDetection
 from src.config import settings
 from src.utils.logging_config import setup_logging
 
@@ -74,6 +74,18 @@ def main():
                 logger.info(f"  全体達成率: {analytics_summary.get('achievement_rate')}%")
             else:
                 logger.warning("分析サマリーの生成に失敗しました。")
+            logger.info("========================================")
+
+            # 8. データ整合性チェックの実行と結果表示
+            logger.info("========== データ整合性チェック ==========")
+            error_detector = ErrorDetection(conn)
+            inconsistencies = error_detector.find_quantity_inconsistencies()
+            if not inconsistencies.empty:
+                logger.warning(f"{len(inconsistencies)}件の数量の不整合を検出しました。")
+                # 検出した不整合データをログに出力
+                logger.warning("不整合データ:\n" + inconsistencies.to_string())
+            else:
+                logger.info("数量の不整合は見つかりませんでした。")
             logger.info("========================================")
 
     except Exception as e:

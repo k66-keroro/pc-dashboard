@@ -12,7 +12,7 @@
 ### P2: 分析機能の実装
 - [x] 分析機能の基盤となる `src/core/analytics.py` を作成する
 - [x] 生産実績分析クラス (`ProductionAnalytics`) を実装する (計画 vs 実績)
-- [ ] エラー検出クラス (`ErrorDetection`) を実装する (マスタ不備チェックなど)
+- [x] エラー検出クラス (`ErrorDetection`) を実装する (数量の不整合チェック)
 - [ ] 在庫滞留分析クラス (`InventoryAnalysis`) を実装する
 
 ### P3: ダッシュボード (UI) の実装

@@ -57,3 +57,47 @@ class ProductionAnalytics:
         except Exception as e:
             logger.error(f"生産サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
             return {}
+
+
+class ErrorDetection:
+    """
+    データ内の不整合や業務ルール違反を検出するクラス。
+    """
+
+    def __init__(self, db_conn: sqlite3.Connection):
+        """
+        コンストラクタ
+
+        :param db_conn: SQLiteデータベースへの接続オブジェクト
+        """
+        self.db_conn = db_conn
+
+    def find_quantity_inconsistencies(self) -> pd.DataFrame:
+        """
+        数量の計算が一致しないレコードを検出する。
+        (指図数量 - 累計数量 != 残数量)
+
+        :return: 数量が不整合なレコードを含むDataFrame
+        """
+        try:
+            query = """
+            SELECT
+                id,
+                order_number,
+                item_code,
+                item_text,
+                order_quantity,
+                cumulative_quantity,
+                remaining_quantity,
+                (order_quantity - cumulative_quantity) AS expected_remaining
+            FROM
+                production_records
+            WHERE
+                (order_quantity - cumulative_quantity) != remaining_quantity;
+            """
+            df = pd.read_sql_query(query, self.db_conn)
+            logger.info(f"数量の不整合チェックを実行しました。{len(df)}件のエラーを検出しました。")
+            return df
+        except Exception as e:
+            logger.error(f"数量の不整合チェック中にエラーが発生しました: {e}", exc_info=True)
+            return pd.DataFrame()
