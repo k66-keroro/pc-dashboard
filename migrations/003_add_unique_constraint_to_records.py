@@ -48,8 +48,9 @@ def upgrade(conn: sqlite3.Connection):
         """)
         logger.info("Created new production_records table with UNIQUE constraint.")
 
-        # 4. 古いテーブルから新しいテーブルにデータをコピー
-        #    created_atは自動で設定されるのでコピー対象から外す
+        # 4. 古いテーブルから新しいテーブルに重複を除去してデータをコピー
+        #    (order_number, input_datetime) の組み合わせで最も若いidを持つレコードのみを移行
+        logger.info("Copying de-duplicated data from old table to new table...")
         cursor.execute("""
             INSERT INTO production_records (
                 id, plant, storage_location, item_code, item_text, order_number,
@@ -64,7 +65,12 @@ def upgrade(conn: sqlite3.Connection):
                 cumulative_quantity, remaining_quantity, input_datetime,
                 planned_completion_date, wbs_element, sales_order_number,
                 sales_order_item_number, amount
-            FROM production_records_old;
+            FROM production_records_old
+            WHERE id IN (
+                SELECT MIN(id)
+                FROM production_records_old
+                GROUP BY order_number, input_datetime
+            );
         """)
         logger.info("Copied data from old table to new table.")
 
