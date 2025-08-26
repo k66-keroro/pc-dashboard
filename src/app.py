@@ -18,7 +18,8 @@ def load_data():
     conn.close()
 
     # 'input_datetime'をdatetimeオブジェクトに変換
-    df['input_datetime'] = pd.to_datetime(df['input_datetime'])
+    # ISO8601形式("T"区切り)とその他の形式に柔軟に対応するため、formatを指定せずにエラーを無視する
+    df['input_datetime'] = pd.to_datetime(df['input_datetime'], errors='coerce')
     # 'completion_date'を作成
     df['completion_date'] = df['input_datetime'].dt.date
 
