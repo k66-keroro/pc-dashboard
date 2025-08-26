@@ -39,6 +39,9 @@ def main():
 
     df = load_data()
 
+    # 不正な日付データを安全に除外
+    df.dropna(subset=['completion_date'], inplace=True)
+
     if df.empty:
         st.warning("表示するデータがありません。")
         return
