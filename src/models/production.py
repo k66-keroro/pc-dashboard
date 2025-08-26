@@ -30,6 +30,9 @@ class ProductionRecord(BaseModel):
     sales_order_number: Optional[str] = Field(None, alias='受注伝票番号')
     sales_order_item_number: Optional[str] = Field(None, alias='受注明細番号')
 
+    # 金額 (amount) はデータソースにはなく、処理中に計算される
+    amount: Optional[float] = Field(None, alias='amount')
+
     @field_validator('input_datetime', mode='before')
     @classmethod
     def to_python_datetime(cls, value):

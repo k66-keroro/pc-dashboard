@@ -39,6 +39,7 @@ def create_tables(conn: sqlite3.Connection):
         wbs_element TEXT,
         sales_order_number TEXT,
         sales_order_item_number TEXT,
+        amount REAL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
@@ -63,8 +64,8 @@ def insert_production_records(conn: sqlite3.Connection, records: List[Production
         plant, storage_location, item_code, item_text, order_number, order_type,
         mrp_controller, order_quantity, actual_quantity, cumulative_quantity,
         remaining_quantity, input_datetime, planned_completion_date, wbs_element,
-        sales_order_number, sales_order_item_number
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        sales_order_number, sales_order_item_number, amount
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
 
     # Pydanticモデルをタプルのリストに変換
@@ -73,7 +74,7 @@ def insert_production_records(conn: sqlite3.Connection, records: List[Production
             r.plant, r.storage_location, r.item_code, r.item_text, r.order_number, r.order_type,
             r.mrp_controller, r.order_quantity, r.actual_quantity, r.cumulative_quantity,
             r.remaining_quantity, r.input_datetime, r.planned_completion_date, r.wbs_element,
-            r.sales_order_number, r.sales_order_item_number
+            r.sales_order_number, r.sales_order_item_number, r.amount
         ) for r in records
     ]
 

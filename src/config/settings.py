@@ -21,7 +21,11 @@ DB_PATH = DB_DIR / DB_NAME
 DATA_FILE_NAME = "KANSEI_JISSEKI.txt"
 DATA_FILE_PATH = ROOT_DIR / DATA_FILE_NAME
 
-# 5. ロギング設定
+# 5. 品目マスターファイルの設定
+ITEM_MASTER_FILE_NAME = "MARA_DL.csv"
+ITEM_MASTER_PATH = ROOT_DIR / "User-supplied_materials" / ITEM_MASTER_FILE_NAME
+
+# 6. ロギング設定
 LOG_FILE_NAME = "app.log"
 LOG_FILE_PATH = LOGS_DIR / LOG_FILE_NAME
 LOG_LEVEL = logging.INFO # or "INFO" as a string if preferred

@@ -11,6 +11,7 @@ import logging
 from src.models.database import get_db_connection, create_tables
 from src.core.data_processor import DataProcessor
 from src.core.analytics import ProductionAnalytics, ErrorDetection
+from src.core.reporter import ReportGenerator
 from src.config import settings
 from src.utils.logging_config import setup_logging
 
@@ -52,7 +53,7 @@ def main():
 
         # 5. データ処理の実行
         processor = DataProcessor(conn)
-        summary = processor.process_and_load_file(str(settings.DATA_FILE_PATH))
+        summary = processor.process_file_and_load_to_db()
 
         # 6. 結果のサマリーを表示
         logger.info("========== 処理結果サマリー ==========")
@@ -87,6 +88,12 @@ def main():
             else:
                 logger.info("数量の不整合は見つかりませんでした。")
             logger.info("========================================")
+
+            # 9. レポート生成
+            logger.info("========== レポート生成 ==========")
+            reporter = ReportGenerator(processor.final_df)
+            reporter.generate_all_reports()
+            logger.info("===================================")
 
     except Exception as e:
         logger.critical(f"パイプラインの実行中に致命的なエラーが発生しました: {e}", exc_info=True)

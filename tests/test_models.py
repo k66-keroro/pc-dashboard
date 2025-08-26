@@ -4,8 +4,7 @@ import tempfile
 import os
 import datetime
 from pathlib import Path
-
-from pydantic import ValidationError
+import shutil
 
 # sys.path modification to allow imports from src
 import sys
@@ -15,6 +14,7 @@ sys.path.append(str(project_root))
 from src.models.production import ProductionRecord
 from src.models.database import create_tables
 from src.core.data_processor import DataProcessor
+from src.config import settings
 
 class TestProductionDataPipeline(unittest.TestCase):
 
@@ -23,6 +23,24 @@ class TestProductionDataPipeline(unittest.TestCase):
         self.conn = sqlite3.connect(":memory:", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
         self.conn.row_factory = sqlite3.Row
         create_tables(self.conn)
+
+        # Create a temporary directory for user-supplied materials
+        self.temp_dir = tempfile.mkdtemp()
+        self.user_materials_dir = Path(self.temp_dir) / "User-supplied_materials"
+        self.user_materials_dir.mkdir()
+
+        # Create a dummy item master file
+        self.master_file_path = self.user_materials_dir / "MARA_DL.csv"
+        with open(self.master_file_path, 'w', encoding='utf-8') as f:
+            f.write("品目\t標準原価\n")
+            f.write("P001\t100\n")
+            f.write("P005\t200\n")
+
+        # Temporarily override the settings
+        self.original_item_master_path = settings.ITEM_MASTER_PATH
+        settings.ITEM_MASTER_PATH = self.master_file_path
+
+        # Now instantiate the processor, which will load the dummy master
         self.processor = DataProcessor(self.conn)
 
         self.header = (
@@ -37,22 +55,17 @@ class TestProductionDataPipeline(unittest.TestCase):
         self.row_bad_date = "P100\t1120\tP004\tTest Item 4\t50004\tZP11\tPC1\t40\t40\t40\t0\t2025/08/20 10:15\t2025-08-28\t\t\t\n"
         self.row_leading_zeros = "P100\t1120\tP005\tTest Item 5\t50005\tZP11\tPC1\t50\t50\t50\t0\t2025/08/20 10:20\t20250829\t\t000345\t0010\n"
 
-        # Create a temporary file with all test data
-        self.test_data = self.header + self.valid_row + self.row_bad_quantity + self.row_missing_required + self.row_bad_date + self.row_leading_zeros
-        self.temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='shift_jis', errors='replace', suffix=".txt")
-        self.temp_file.write(self.test_data)
-        self.temp_file.seek(0)
-        self.temp_file_path = self.temp_file.name
-
     def tearDown(self):
         """テスト後にDB接続を閉じ、一時ファイルを削除"""
         self.conn.close()
-        self.temp_file.close()
-        os.unlink(self.temp_file_path)
+        # Restore original settings
+        settings.ITEM_MASTER_PATH = self.original_item_master_path
+        # Remove the temporary directory
+        shutil.rmtree(self.temp_dir)
+
 
     def test_clean_sap_numbers_validator(self):
         """clean_sap_numbersバリデーターを単体でテスト"""
-        # Test cases for sales_order_number
         self.assertIsNone(ProductionRecord.clean_sap_numbers(None))
         self.assertIsNone(ProductionRecord.clean_sap_numbers(''))
         self.assertIsNone(ProductionRecord.clean_sap_numbers('   '))
@@ -76,7 +89,19 @@ class TestProductionDataPipeline(unittest.TestCase):
 
     def test_data_processing_end_to_end(self):
         """ファイル処理からDB挿入までのエンドツーエンドテスト"""
-        summary = self.processor.process_and_load_file(self.temp_file_path)
+        test_data = self.header + self.valid_row + self.row_bad_quantity + self.row_missing_required + self.row_bad_date + self.row_leading_zeros
+
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='shift_jis', suffix=".txt") as temp_f:
+            temp_f.write(test_data)
+            temp_file_path = temp_f.name
+
+        original_data_file_path = settings.DATA_FILE_PATH
+        settings.DATA_FILE_PATH = Path(temp_file_path)
+
+        summary = self.processor.process_file_and_load_to_db()
+
+        settings.DATA_FILE_PATH = original_data_file_path
+        os.unlink(temp_file_path)
 
         self.assertEqual(summary['total_rows'], 5)
         self.assertEqual(summary['successful_inserts'], 2)
@@ -87,20 +112,23 @@ class TestProductionDataPipeline(unittest.TestCase):
         count = cursor.fetchone()[0]
         self.assertEqual(count, 2)
 
-        # Test the newly added row with leading zeros
+        # Test the newly added row with leading zeros and that amount was calculated
         cursor.execute("SELECT * FROM production_records WHERE item_code = 'P005'")
         db_record = cursor.fetchone()
         self.assertIsNotNone(db_record)
         self.assertEqual(db_record['sales_order_number'], '345')
         self.assertEqual(db_record['sales_order_item_number'], '10')
+        self.assertEqual(db_record['amount'], 50 * 200) # 実績数量 * 標準原価
 
     def test_empty_and_header_only_file(self):
         """空のファイルやヘッダーのみのファイルを処理するテスト"""
-        # ... (this test remains the same)
+        original_data_file_path = settings.DATA_FILE_PATH
+
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as empty_f:
             empty_file_path = empty_f.name
 
-        summary = self.processor.process_and_load_file(empty_file_path)
+        settings.DATA_FILE_PATH = Path(empty_file_path)
+        summary = self.processor.process_file_and_load_to_db()
         self.assertEqual(summary['total_rows'], 0)
         self.assertEqual(summary['failed_rows'], 0)
         self.assertEqual(summary['successful_inserts'], 0)
@@ -110,10 +138,14 @@ class TestProductionDataPipeline(unittest.TestCase):
             header_f.write(self.header)
             header_file_path = header_f.name
 
-        summary = self.processor.process_and_load_file(header_file_path)
+        settings.DATA_FILE_PATH = Path(header_file_path)
+        summary = self.processor.process_file_and_load_to_db()
         self.assertEqual(summary['total_rows'], 0)
         self.assertEqual(summary['successful_inserts'], 0)
         os.unlink(header_file_path)
+
+        settings.DATA_FILE_PATH = original_data_file_path
+
 
 if __name__ == '__main__':
     unittest.main()
