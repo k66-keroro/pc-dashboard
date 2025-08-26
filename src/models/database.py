@@ -11,7 +11,8 @@ def get_db_connection(db_path: Path = settings.DB_PATH) -> sqlite3.Connection:
     データベースファイルが存在しない場合は、親ディレクトリを作成してから接続する。
     """
     # The directory creation is now handled in settings.py
-    conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+    # detect_typesを無効化し、型変換をPandasに完全に委ねる
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
