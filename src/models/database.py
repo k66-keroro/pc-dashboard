@@ -15,6 +15,34 @@ def get_db_connection(db_path: Path = settings.DB_PATH) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     return conn
 
+def initialize_schema_version(conn: sqlite3.Connection):
+    """
+    `schema_version`テーブルを作成し、バージョン0で初期化する。
+    テーブルが既に存在する場合は何もしない。
+    """
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER NOT NULL PRIMARY KEY
+        );
+    """)
+    # テーブルが空の場合のみバージョン0を挿入
+    cursor.execute("SELECT COUNT(*) FROM schema_version")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO schema_version (version) VALUES (0)")
+        conn.commit()
+
+def get_schema_version(conn: sqlite3.Connection) -> int:
+    """現在のスキーマバージョンを取得する。"""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT version FROM schema_version")
+        result = cursor.fetchone()
+        return result[0] if result else 0
+    except sqlite3.OperationalError:
+        # テーブルが存在しない場合はバージョン0とみなす
+        return 0
+
 def create_tables(conn: sqlite3.Connection):
     """
     データベース内に必要なテーブルとインデックスを作成する。
@@ -60,7 +88,7 @@ def insert_production_records(conn: sqlite3.Connection, records: List[Production
     複数の生産実績レコードをデータベースに一括で挿入する。
     """
     sql = """
-    INSERT INTO production_records (
+    INSERT OR IGNORE INTO production_records (
         plant, storage_location, item_code, item_text, order_number, order_type,
         mrp_controller, order_quantity, actual_quantity, cumulative_quantity,
         remaining_quantity, input_datetime, planned_completion_date, wbs_element,

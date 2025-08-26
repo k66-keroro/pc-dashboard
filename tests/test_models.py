@@ -12,7 +12,7 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
 from src.models.production import ProductionRecord
-from src.models.database import create_tables
+from src.models.migration_manager import apply_migrations
 from src.core.data_processor import DataProcessor
 from src.config import settings
 
@@ -22,7 +22,6 @@ class TestProductionDataPipeline(unittest.TestCase):
         """テストごとにインメモリDBとテストファイルを設定"""
         self.conn = sqlite3.connect(":memory:", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
         self.conn.row_factory = sqlite3.Row
-        create_tables(self.conn)
 
         # Create a temporary directory for user-supplied materials
         self.temp_dir = tempfile.mkdtemp()
@@ -40,7 +39,10 @@ class TestProductionDataPipeline(unittest.TestCase):
         self.original_item_master_path = settings.ITEM_MASTER_PATH
         settings.ITEM_MASTER_PATH = self.master_file_path
 
-        # Now instantiate the processor, which will load the dummy master
+        # Apply migrations which will use the patched setting for seeding
+        apply_migrations(self.conn)
+
+        # Now instantiate the processor
         self.processor = DataProcessor(self.conn)
 
         self.header = (

@@ -1,43 +1,34 @@
 import sys
+import sqlite3
 from pathlib import Path
-import os
 
 # プロジェクトのルートディレクトリをPythonパスに追加
-# これにより、`src`パッケージを正しくインポートできる
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
-from src.models.database import get_db_connection, create_tables, DEFAULT_DB_PATH
+from src.models.database import create_tables
 
-def main():
+def upgrade(conn: sqlite3.Connection):
     """
-    データベースを初期化し、テーブルを作成するマイグレーションスクリプト。
+    バージョン1へのアップグレード。
+    初期テーブル `production_records` を作成する。
     """
-    print("データベースマイグレーションを開始します...")
+    print("Applying migration 001: Create initial tables...")
+    create_tables(conn)
+    print("Migration 001 applied successfully.")
 
-    # 既存のデータベースファイルを削除して、クリーンな状態で開始する
-    if os.path.exists(DEFAULT_DB_PATH):
-        print(f"既存のデータベースファイル {DEFAULT_DB_PATH} を削除します。")
-        os.remove(DEFAULT_DB_PATH)
-
-    conn = None
-    try:
-        # データベース接続を取得
-        conn = get_db_connection()
-        print("データベース接続を確立しました。")
-
-        # テーブルを作成
-        create_tables(conn)
-        print("テーブル 'production_records' とインデックスが正常に作成されました。")
-
-        print("マイグレーションが正常に完了しました。")
-
-    except Exception as e:
-        print(f"マイグレーション中にエラーが発生しました: {e}")
-    finally:
-        if conn:
-            conn.close()
-            print("データベース接続を閉じました。")
-
+# このスクリプトが直接実行された場合のフォールバック（基本的には使用しない）
 if __name__ == "__main__":
-    main()
+    from src.models.database import get_db_connection, DEFAULT_DB_PATH
+
+    print(f"Running migration 001 directly on database: {DEFAULT_DB_PATH}")
+    db_conn = None
+    try:
+        db_conn = get_db_connection()
+        upgrade(db_conn)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        if db_conn:
+            db_conn.close()
+            print("Database connection closed.")

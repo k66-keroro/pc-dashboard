@@ -18,33 +18,53 @@ class DataProcessor:
     def __init__(self, db_conn: sqlite3.Connection):
         """
         DataProcessorを初期化する。
-        インスタンス化時に品目マスターを読み込んで保持する。
-
-        :param db_conn: SQLiteデータベースへの接続オブジェクト。
         """
         self.db_conn = db_conn
-        self.item_master_df = self._load_item_master()
+        self.item_master_df = self._load_item_master_from_db()
         self.final_df = pd.DataFrame()
 
-    def _load_item_master(self) -> pd.DataFrame:
-        """品目マスターファイルを読み込む。"""
+    def _load_item_master_from_db(self) -> pd.DataFrame:
+        """品目マスターをデータベースから読み込む。"""
         try:
-            master_df = pd.read_csv(
-                settings.ITEM_MASTER_PATH,
-                sep='\t',
-                dtype={'品目': str, '標準原価': float}
-            )
-            master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
+            # item_masterテーブルが存在しない場合も考慮
+            query = "SELECT name FROM sqlite_master WHERE type='table' AND name='item_master';"
+            cursor = self.db_conn.cursor()
+            cursor.execute(query)
+            if cursor.fetchone() is None:
+                logger.warning("`item_master`テーブルがDBに存在しません。")
+                return pd.DataFrame()
+
+            master_df = pd.read_sql_query("SELECT item_code, standard_cost FROM item_master", self.db_conn)
             master_df.set_index('item_code', inplace=True)
-            logger.info(f"品目マスターを正常に読み込みました。{len(master_df)}件")
+            logger.info(f"DBから品目マスターを正常に読み込みました。{len(master_df)}件")
             return master_df
-        except FileNotFoundError:
-            logger.error(f"品目マスターファイルが見つかりません: {settings.ITEM_MASTER_PATH}")
-            # マスターがなくても処理を続けられるように空のDataFrameを返す
-            return pd.DataFrame()
         except Exception as e:
-            logger.error(f"品目マスターの読み込み中にエラーが発生しました: {e}")
+            logger.error(f"DBからの品目マスター読み込み中にエラーが発生しました: {e}")
             return pd.DataFrame()
+
+    def _update_dynamic_master(self, prod_df: pd.DataFrame):
+        """生産実績データに存在する新しい品目をマスターに登録する。"""
+        logger.info("品目マスターの動的更新を開始します。")
+        prod_items = set(prod_df['品目コード'].unique())
+        master_items = set(self.item_master_df.index)
+
+        new_items = prod_items - master_items
+
+        if not new_items:
+            logger.info("新しい品目は見つかりませんでした。")
+            return
+
+        logger.info(f"{len(new_items)}件の新しい品目を検出しました。DBに登録します。")
+        new_items_df = pd.DataFrame(list(new_items), columns=['item_code'])
+        new_items_df['standard_cost'] = None # 新規品目は原価不明
+
+        try:
+            new_items_df.to_sql('item_master', self.db_conn, if_exists='append', index=False)
+            logger.info(f"{len(new_items_df)}件の新しい品目をマスターに登録しました。")
+            # マスターを再読み込みして更新を反映
+            self.item_master_df = self._load_item_master_from_db()
+        except Exception as e:
+            logger.error(f"新しい品目のマスターへの登録中にエラーが発生しました: {e}", exc_info=True)
 
     def _load_production_dataframe(self, file_path: Path) -> pd.DataFrame:
         """
@@ -62,7 +82,6 @@ class DataProcessor:
             df.columns = df.columns.str.strip()
             df = df.where(pd.notna(df), None)
 
-            # データ型の変換
             df['入力日時'] = pd.to_datetime(df['入力日時'], format='%Y/%m/%d %H:%M', errors='coerce')
             numeric_cols = ['指図数量', '実績数量', '累計数量', '残数量']
             for col in numeric_cols:
@@ -86,13 +105,12 @@ class DataProcessor:
         """
         if self.item_master_df.empty:
             logger.warning("品目マスターがロードされていないため、金額計算をスキップします。")
-            prod_df['amount'] = 0
+            prod_df['amount'] = 0.0
             return prod_df
 
         # Pydanticモデルのaliasに合わせてカラム名を一時的に変更
         prod_df.rename(columns={'品目コード': 'item_code'}, inplace=True)
 
-        # マスターと結合
         enriched_df = pd.merge(
             prod_df,
             self.item_master_df,
@@ -100,21 +118,17 @@ class DataProcessor:
             how='left'
         )
 
-        # '実績数量' と 'standard_cost' を数値型に変換
         enriched_df['実績数量'] = pd.to_numeric(enriched_df['実績数量'], errors='coerce')
         enriched_df['standard_cost'] = pd.to_numeric(enriched_df['standard_cost'], errors='coerce')
 
-        # 金額を計算 (実績数量 * 標準原価)
         enriched_df['amount'] = enriched_df['実績数量'] * enriched_df['standard_cost']
 
-        # マスターに存在しなかった品目の処理
         missing_cost_count = enriched_df['amount'].isna().sum()
         if missing_cost_count > 0:
             missing_items = enriched_df[enriched_df['amount'].isna()]['item_code'].unique()
             logger.warning(f"{missing_cost_count}件のレコードで標準原価が見つからず、金額を0に設定しました。対象品目: {list(missing_items)}")
             enriched_df['amount'].fillna(0, inplace=True)
 
-        # カラム名を元に戻す
         enriched_df.rename(columns={'item_code': '品目コード'}, inplace=True)
 
         return enriched_df
@@ -149,6 +163,9 @@ class DataProcessor:
                 logging.warning(f"ファイルが空か、読み込みに失敗しました: {path}")
                 return {"file": str(path), "total_rows": 0, "successful_inserts": 0, "failed_rows": 0}
 
+            # マスターデータの動的更新
+            self._update_dynamic_master(prod_df)
+
             # データエンリッチメント（マスター結合と金額計算）
             enriched_df = self._enrich_data(prod_df)
 
@@ -161,7 +178,6 @@ class DataProcessor:
             else:
                 logging.warning("有効なレコードが見つからなかったため、データベースへの挿入は行われませんでした。")
 
-            # 最終的なDFをインスタンス変数に格納
             self.final_df = enriched_df
 
             summary = {

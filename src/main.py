@@ -8,7 +8,8 @@ import logging
 # and running the script from the root.
 # For direct execution, we might still need a path modification.
 # Let's rely on running it as a module for now.
-from src.models.database import get_db_connection, create_tables
+from src.models.database import get_db_connection
+from src.models.migration_manager import apply_migrations
 from src.core.data_processor import DataProcessor
 from src.core.analytics import ProductionAnalytics, ErrorDetection
 from src.core.reporter import ReportGenerator
@@ -45,11 +46,11 @@ def main():
 
     conn = None
     try:
-        # 4. DB接続とテーブル作成
+        # 4. DB接続とマイグレーションの適用
         logger.info(f"データベースに接続しています: {settings.DB_PATH}")
         conn = get_db_connection()
-        create_tables(conn)
-        logger.info("データベースとテーブルの準備が完了しました。")
+        apply_migrations(conn)
+        logger.info("データベースの準備が完了しました。")
 
         # 5. データ処理の実行
         processor = DataProcessor(conn)
