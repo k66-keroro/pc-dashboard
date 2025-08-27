@@ -41,40 +41,53 @@ class TestAdvancedFeatures(unittest.TestCase):
         settings.ITEM_MASTER_PATH = self.original_item_master_path
         shutil.rmtree(self.temp_dir)
 
-    def test_dynamic_master_creation(self):
+    def test_master_sync_logic(self):
         """
-        Test that new items from production data are dynamically added to the master.
+        Test that sync_master_from_csv performs a full refresh of the master data.
         """
-        # 1. Initial master has 0 records (migrations create the table but don't seed in-memory)
-        # Let's seed it with one item.
-        cursor = self.conn.cursor()
-        cursor.execute("INSERT INTO item_master (item_code, standard_cost) VALUES (?, ?)", ('EXISTING_ITEM', 100))
-        self.conn.commit()
-
-        # 2. Create a production dataframe with a new item
-        prod_data = {
-            '品目コード': ['EXISTING_ITEM', 'NEW_ITEM_1', 'NEW_ITEM_2', 'NEW_ITEM_1'],
-        }
-        prod_df = pd.DataFrame(prod_data)
-
-        # 3. Run the dynamic update process
         processor = DataProcessor(self.conn)
-        processor._update_dynamic_master(prod_df)
+        cursor = self.conn.cursor()
 
-        # 4. Check the item_master table
-        master_df = pd.read_sql_query("SELECT * FROM item_master", self.conn)
+        # 1. Sync with a first version of the master file
+        master_v1_content = "品目\t標準原価\nITEM_A\t100\nITEM_B\t200\n"
+        master_v1_path = Path(self.temp_dir) / "MASTER_V1.csv"
+        with open(master_v1_path, 'w') as f:
+            f.write(master_v1_content)
 
-        # Should now have 3 items: EXISTING_ITEM, NEW_ITEM_1, NEW_ITEM_2
-        self.assertEqual(len(master_df), 3)
+        settings.ITEM_MASTER_PATH = master_v1_path
+        processor.sync_master_from_csv()
 
-        # Check that the new items were added
-        new_item_codes = set(master_df['item_code'])
-        self.assertIn('NEW_ITEM_1', new_item_codes)
-        self.assertIn('NEW_ITEM_2', new_item_codes)
+        # Check state after first sync
+        master_df_v1 = pd.read_sql_query("SELECT * FROM item_master", self.conn)
+        self.assertEqual(len(master_df_v1), 2)
+        self.assertIn('ITEM_A', master_df_v1['item_code'].values)
+        self.assertIn('ITEM_B', master_df_v1['item_code'].values)
 
-        # Check that the standard_cost for new items is None (NULL), which pandas reads as NaN
-        new_item_1_cost = master_df[master_df['item_code'] == 'NEW_ITEM_1']['standard_cost'].iloc[0]
-        self.assertTrue(pd.isna(new_item_1_cost))
+        # 2. Sync with a second, different version of the master file
+        #    - ITEM_A cost updated
+        #    - ITEM_B removed
+        #    - ITEM_C added
+        master_v2_content = "品目\t標準原価\nITEM_A\t150\nITEM_C\t300\n"
+        master_v2_path = Path(self.temp_dir) / "MASTER_V2.csv"
+        with open(master_v2_path, 'w') as f:
+            f.write(master_v2_content)
+
+        settings.ITEM_MASTER_PATH = master_v2_path
+        processor.sync_master_from_csv()
+
+        # Check state after second sync (should be a full refresh)
+        master_df_v2 = pd.read_sql_query("SELECT * FROM item_master ORDER BY item_code", self.conn)
+        self.assertEqual(len(master_df_v2), 2)
+
+        # ITEM_B should be gone
+        self.assertNotIn('ITEM_B', master_df_v2['item_code'].values)
+
+        # ITEM_A should be present with updated cost
+        self.assertEqual(master_df_v2.loc[0, 'item_code'], 'ITEM_A')
+        self.assertEqual(master_df_v2.loc[0, 'standard_cost'], 150)
+
+        # ITEM_C should be present
+        self.assertEqual(master_df_v2.loc[1, 'item_code'], 'ITEM_C')
 
     def test_duplicate_record_prevention(self):
         """

@@ -13,10 +13,13 @@ st.set_page_config(layout="wide", page_title="PC製造部門向けダッシュ�
 def load_and_prepare_data():
     """
     DBからデータをロードし、前処理と分析列の追加を行う。
+    この関数はキャッシュされ、2回目以降の実行は高速です。
     """
     conn = get_db_connection()
-    df = pd.read_sql_query("SELECT * FROM production_records", conn)
-    conn.close()
+    try:
+        df = pd.read_sql_query("SELECT * FROM production_records", conn)
+    finally:
+        conn.close()
 
     # --- データ型変換とクリーンアップ ---
     df['input_datetime'] = pd.to_datetime(df['input_datetime'], errors='coerce')
@@ -28,7 +31,7 @@ def load_and_prepare_data():
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     # --- 分析列の追加 ---
-    # PC始まりでフィルタ
+    # PC始まりのMRP管理者のみを対象とする
     df = df[df['mrp_controller'].str.startswith('PC', na=False)].copy()
 
     df['week_category'] = df['completion_date'].apply(
@@ -41,10 +44,7 @@ def load_and_prepare_data():
 def get_kpi_metrics(df: pd.DataFrame):
     """指定されたDFからKPIを計算する"""
     if df.empty:
-        return {
-            'total_amount': 0, 'achievement_rate': 0,
-            'unique_items': 0, 'unique_orders': 0
-        }
+        return {'total_amount': 0, 'achievement_rate': 0, 'unique_items': 0, 'unique_orders': 0}
 
     total_amount = df['amount'].sum()
     total_actual = df['actual_quantity'].sum()
@@ -58,13 +58,11 @@ def get_kpi_metrics(df: pd.DataFrame):
         'unique_items': unique_items, 'unique_orders': unique_orders
     }
 
-
 def main():
     """
     Streamlitダッシュボードのメイン関数
     """
     st.title("PC製造部門向けダッシュボード")
-
     df = load_and_prepare_data()
 
     if df.empty:
@@ -73,49 +71,31 @@ def main():
 
     # --- サイドバー ---
     st.sidebar.header("表示設定")
-
     min_date = df['completion_date'].min()
     max_date = df['completion_date'].max()
-
     start_date, end_date = st.sidebar.date_input(
-        "期間を選択",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-        format="YYYY/MM/DD"
+        "期間を選択", value=(min_date, max_date),
+        min_value=min_date, max_value=max_date, format="YYYY/MM/DD"
     )
-
-    agg_target = st.sidebar.radio(
-        "集計対象",
-        ('金額', '実績数量'),
-        horizontal=True,
-    )
+    agg_target = st.sidebar.radio("集計対象", ('金額', '実績数量'), horizontal=True)
     agg_column = 'amount' if agg_target == '金額' else 'actual_quantity'
     agg_label = "金額" if agg_target == '金額' else "数量"
-
 
     if not start_date or not end_date or start_date > end_date:
         st.sidebar.error("有効な期間を選択してください。")
         return
 
-    # --- メインコンテンツ ---
-    filtered_df = df[
-        (df['completion_date'] >= start_date) &
-        (df['completion_date'] <= end_date)
-    ]
-
+    # --- データフィルタリング ---
+    filtered_df = df[(df['completion_date'] >= start_date) & (df['completion_date'] <= end_date)]
     if filtered_df.empty:
         st.warning("選択された期間にデータがありません。")
         return
 
     # --- KPI表示 ---
     st.header("サマリー")
-
-    # 1. 本日実績
-    st.subheader("本日 (2025/08/26) の実績")
-    today_df = filtered_df[filtered_df['completion_date'] == datetime.date(2025, 8, 26)]
+    st.subheader("本日実績")
+    today_df = filtered_df[filtered_df['completion_date'] == datetime.date.today()]
     today_kpis = get_kpi_metrics(today_df)
-
     kpi_cols = st.columns(4)
     kpi_cols[0].metric("生産金額", f"¥{today_kpis['total_amount']:,.0f}")
     kpi_cols[1].metric("達成率", f"{today_kpis['achievement_rate']:.1f}%")
@@ -123,74 +103,62 @@ def main():
     kpi_cols[3].metric("総指図数", f"{today_kpis['unique_orders']}")
 
     st.divider()
-
-    # 2. 期間全体のKPI
-    st.subheader(f"{start_date.strftime('%Y/%m/%d')} ~ {end_date.strftime('%Y/%m/%d')} のサマリー")
+    st.subheader(f"期間サマリー: {start_date.strftime('%Y/%m/%d')} ~ {end_date.strftime('%Y/%m/%d')}")
     period_kpis = get_kpi_metrics(filtered_df)
-
     kpi_cols_period = st.columns(4)
     kpi_cols_period[0].metric("総生産金額", f"¥{period_kpis['total_amount']:,.0f}")
     kpi_cols_period[1].metric("全体達成率", f"{period_kpis['achievement_rate']:.1f}%")
     kpi_cols_period[2].metric("生産品番数", f"{period_kpis['unique_items']}")
     kpi_cols_period[3].metric("総指図数", f"{period_kpis['unique_orders']}")
 
-
     # --- タブ表示 ---
-    tab_summary, tab_daily, tab_weekly, tab_details = st.tabs(["グラフ分析", "日別レポート", "週別レポート", "明細データ"])
+    tab_graphs, tab_daily, tab_weekly, tab_details = st.tabs(["グラフ分析", "日別レポート", "週別レポート", "明細データ"])
 
-    with tab_summary:
-        st.header("グラフ分析")
+    with tab_graphs:
         col1, col2 = st.columns([2, 1])
-
         with col1:
             st.subheader(f"{agg_label}の時系列推移")
             time_series_df = filtered_df.groupby(['completion_date', 'mrp_type'])[agg_column].sum().unstack().fillna(0)
             st.line_chart(time_series_df)
-
         with col2:
             st.subheader(f"内製/外注の構成比 ({agg_label}ベース)")
             mrp_type_summary = filtered_df.groupby('mrp_type')[agg_column].sum().reset_index()
-            mrp_type_summary['percentage'] = (mrp_type_summary[agg_column] / mrp_type_summary[agg_column].sum()) * 100
-
+            mrp_type_summary['percentage'] = (mrp_type_summary[agg_column] / mrp_type_summary[agg_column].sum())
             chart = alt.Chart(mrp_type_summary).mark_arc(innerRadius=50).encode(
                 theta=alt.Theta(field=agg_column, type="quantitative"),
                 color=alt.Color(field="mrp_type", type="nominal", title="タイプ"),
-                tooltip=['mrp_type', alt.Tooltip(agg_column, format=',.0f'), alt.Tooltip('percentage', format='.1f')]
+                tooltip=['mrp_type', alt.Tooltip(agg_column, format=',.0f'), alt.Tooltip('percentage', format='.1%')]
             )
             st.altair_chart(chart, use_container_width=True)
-
         st.subheader(f"{agg_label} TOP 10品目")
         top_10_items = filtered_df.groupby('item_text')[agg_column].sum().nlargest(10).sort_values(ascending=True)
         st.bar_chart(top_10_items, horizontal=True)
 
     with tab_details:
         st.header("生産実績明細データ")
-
-        display_cols = ['MRP管理者', 'completion_date', '指図番号', '品目コード', '品目テキスト', '指図数量', '実績数量', 'amount', 'week_category']
+        display_cols = ['mrp_controller', 'completion_date', 'order_number', 'item_code', 'item_text', 'order_quantity', 'actual_quantity', 'amount', 'week_category']
         display_df = filtered_df[display_cols].rename(columns={
-            'completion_date': '完成日', '指図番号': '指図', '指図数量': '計画数',
-            '実績数量': '完成数', 'amount': '金額', 'week_category': '週区分'
+            'mrp_controller': 'MRP管理者', 'completion_date': '完成日', 'order_number': '指図',
+            'item_code': '品目コード', 'item_text': '品目テキスト', 'order_quantity': '計画数',
+            'actual_quantity': '完成数', 'amount': '金額', 'week_category': '週区分'
         })
-
-        csv_data = display_df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
-            label="このデータをCSVでダウンロード", data=csv_data,
-            file_name=f"details_{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}.csv",
-            mime='text/csv',
+            label="このデータをCSVでダウンロード", data=display_df.to_csv(index=False, encoding='utf-8-sig'),
+            file_name=f"details_{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}.csv", mime='text/csv',
         )
-        st.dataframe(display_df, use_container_width=True)
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    # レポートロジックは ReportGenerator から拝借
     with tab_daily:
         st.header("日別サマリーレポート")
         daily_summary = filtered_df.groupby(['week_category', 'completion_date', 'mrp_controller'])[agg_column].sum().unstack(fill_value=0)
-        st.dataframe(daily_summary.style.format("{:,.0f}"))
+        daily_summary['日別合計'] = daily_summary.sum(axis=1)
+        st.dataframe(daily_summary.style.format("{:,.0f}"), use_container_width=True)
 
     with tab_weekly:
         st.header("週別サマリーレポート")
         weekly_summary = filtered_df.groupby(['week_category', 'mrp_type'])[agg_column].sum().unstack(fill_value=0)
-        st.dataframe(weekly_summary.style.format("{:,.0f}"))
-
+        weekly_summary['合計'] = weekly_summary.sum(axis=1)
+        st.dataframe(weekly_summary.style.format("{:,.0f}"), use_container_width=True)
 
 if __name__ == "__main__":
     main()

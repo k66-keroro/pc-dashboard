@@ -26,7 +26,6 @@ class DataProcessor:
     def _load_item_master_from_db(self) -> pd.DataFrame:
         """品目マスターをデータベースから読み込む。"""
         try:
-            # item_masterテーブルが存在しない場合も考慮
             query = "SELECT name FROM sqlite_master WHERE type='table' AND name='item_master';"
             cursor = self.db_conn.cursor()
             cursor.execute(query)
@@ -42,35 +41,11 @@ class DataProcessor:
             logger.error(f"DBからの品目マスター読み込み中にエラーが発生しました: {e}")
             return pd.DataFrame()
 
-    def _update_dynamic_master(self, prod_df: pd.DataFrame):
-        """生産実績データに存在する新しい品目をマスターに登録する。"""
-        logger.info("品目マスターの動的更新を開始します。")
-        prod_items = set(prod_df['品目コード'].unique())
-        master_items = set(self.item_master_df.index)
-
-        new_items = prod_items - master_items
-
-        if not new_items:
-            logger.info("新しい品目は見つかりませんでした。")
-            return
-
-        logger.info(f"{len(new_items)}件の新しい品目を検出しました。DBに登録します。")
-        new_items_df = pd.DataFrame(list(new_items), columns=['item_code'])
-        new_items_df['standard_cost'] = None # 新規品目は原価不明
-
-        try:
-            new_items_df.to_sql('item_master', self.db_conn, if_exists='append', index=False)
-            logger.info(f"{len(new_items_df)}件の新しい品目をマスターに登録しました。")
-            # マスターを再読み込みして更新を反映
-            self.item_master_df = self._load_item_master_from_db()
-        except Exception as e:
-            logger.error(f"新しい品目のマスターへの登録中にエラーが発生しました: {e}", exc_info=True)
-
     def sync_master_from_csv(self):
         """
-        CSVマスターファイルの最新の内容をデータベースに同期（Upsert）する。
+        CSVマスターファイルの最新の内容でデータベースを洗い替え（全置換）する。
         """
-        logger.info(f"品目マスターの同期を開始します: {settings.ITEM_MASTER_PATH}")
+        logger.info(f"品目マスターの同期（洗い替え）を開始します: {settings.ITEM_MASTER_PATH}")
         try:
             master_df = pd.read_csv(
                 settings.ITEM_MASTER_PATH,
@@ -79,20 +54,17 @@ class DataProcessor:
             )
             master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
 
-            # to_sqlはupsertを直接サポートしないため、手動で実装
             cursor = self.db_conn.cursor()
-            for _, row in master_df.iterrows():
-                cursor.execute("""
-                    INSERT INTO item_master (item_code, standard_cost, created_at)
-                    VALUES (?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(item_code) DO UPDATE SET
-                        standard_cost = excluded.standard_cost;
-                """, (row['item_code'], row['standard_cost']))
+
+            logger.info("既存の品目マスターデータを削除します...")
+            cursor.execute("DELETE FROM item_master;")
+
+            logger.info("CSVから新しい品目マスターデータを挿入します...")
+            master_df.to_sql('item_master', self.db_conn, if_exists='append', index=False)
 
             self.db_conn.commit()
             logger.info(f"品目マスターの同期が完了しました。{len(master_df)}件のレコードを処理しました。")
 
-            # メモリ上のマスターも更新
             self.item_master_df = self._load_item_master_from_db()
 
         except FileNotFoundError:
@@ -103,7 +75,7 @@ class DataProcessor:
 
     def _load_production_dataframe(self, file_path: Path) -> pd.DataFrame:
         """
-        指定された生産実績ファイルを読み込み、基本的な前処理を行ってDataFrameを返す。
+        指定された生産実績ファイルを読み込み、基本的な前処理とフィルタリングを行ってDataFrameを返す。
         """
         try:
             df = pd.read_csv(
@@ -119,13 +91,20 @@ class DataProcessor:
 
             # MRP管理者が'PC'で始まるレコードのみを対象とする
             original_rows = len(df)
-            df = df[df['MRP管理者'].str.startswith('PC', na=False)]
-            logger.info(f"MRP管理者フィルタを適用: {original_rows}行 -> {len(df)}行")
+            if 'MRP管理者' in df.columns:
+                df = df[df['MRP管理者'].str.startswith('PC', na=False)].copy()
+                logger.info(f"MRP管理者フィルタを適用: {original_rows}行 -> {len(df)}行")
+            else:
+                logger.warning("MRP管理者カラムが見つからなかったため、フィルタをスキップします。")
 
-            df['入力日時'] = pd.to_datetime(df['入力日時'], format='%Y/%m/%d %H:%M', errors='coerce')
+            # Use original Japanese column names for conversion
+            if '入力日時' in df.columns:
+                df['入力日時'] = pd.to_datetime(df['入力日時'], format='%Y/%m/%d %H:%M', errors='coerce')
+
             numeric_cols = ['指図数量', '実績数量', '累計数量', '残数量']
             for col in numeric_cols:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
 
             df = df.where(pd.notna(df), None)
             return df
@@ -200,11 +179,8 @@ class DataProcessor:
             prod_df = self._load_production_dataframe(path)
 
             if prod_df.empty:
-                logging.warning(f"ファイルが空か、読み込みに失敗しました: {path}")
+                logger.warning(f"ファイルが空か、読み込みに失敗しました: {path}")
                 return {"file": str(path), "total_rows": 0, "successful_inserts": 0, "failed_rows": 0}
-
-            # マスターデータの動的更新
-            self._update_dynamic_master(prod_df)
 
             # データエンリッチメント（マスター結合と金額計算）
             enriched_df = self._enrich_data(prod_df)
@@ -214,7 +190,7 @@ class DataProcessor:
 
             if valid_records:
                 insert_production_records(self.db_conn, valid_records)
-                logging.info(f"{len(valid_records)}件の有効なレコードをデータベースに挿入しました。")
+                logger.info(f"{len(valid_records)}件の有効なレコードをデータベースに挿入しました。")
             else:
                 logging.warning("有効なレコードが見つからなかったため、データベースへの挿入は行われませんでした。")
 
