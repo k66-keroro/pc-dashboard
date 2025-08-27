@@ -66,6 +66,41 @@ class DataProcessor:
         except Exception as e:
             logger.error(f"新しい品目のマスターへの登録中にエラーが発生しました: {e}", exc_info=True)
 
+    def sync_master_from_csv(self):
+        """
+        CSVマスターファイルの最新の内容をデータベースに同期（Upsert）する。
+        """
+        logger.info(f"品目マスターの同期を開始します: {settings.ITEM_MASTER_PATH}")
+        try:
+            master_df = pd.read_csv(
+                settings.ITEM_MASTER_PATH,
+                sep='\t',
+                dtype={'品目': str, '標準原価': float}
+            )
+            master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
+
+            # to_sqlはupsertを直接サポートしないため、手動で実装
+            cursor = self.db_conn.cursor()
+            for _, row in master_df.iterrows():
+                cursor.execute("""
+                    INSERT INTO item_master (item_code, standard_cost, created_at)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(item_code) DO UPDATE SET
+                        standard_cost = excluded.standard_cost;
+                """, (row['item_code'], row['standard_cost']))
+
+            self.db_conn.commit()
+            logger.info(f"品目マスターの同期が完了しました。{len(master_df)}件のレコードを処理しました。")
+
+            # メモリ上のマスターも更新
+            self.item_master_df = self._load_item_master_from_db()
+
+        except FileNotFoundError:
+            logger.error(f"品目マスターファイルが見つかりません: {settings.ITEM_MASTER_PATH}")
+        except Exception as e:
+            logger.error(f"品目マスターの同期中にエラーが発生しました: {e}", exc_info=True)
+
+
     def _load_production_dataframe(self, file_path: Path) -> pd.DataFrame:
         """
         指定された生産実績ファイルを読み込み、基本的な前処理を行ってDataFrameを返す。
@@ -81,6 +116,11 @@ class DataProcessor:
             )
             df.columns = df.columns.str.strip()
             df = df.where(pd.notna(df), None)
+
+            # MRP管理者が'PC'で始まるレコードのみを対象とする
+            original_rows = len(df)
+            df = df[df['MRP管理者'].str.startswith('PC', na=False)]
+            logger.info(f"MRP管理者フィルタを適用: {original_rows}行 -> {len(df)}行")
 
             df['入力日時'] = pd.to_datetime(df['入力日時'], format='%Y/%m/%d %H:%M', errors='coerce')
             numeric_cols = ['指図数量', '実績数量', '累計数量', '残数量']
