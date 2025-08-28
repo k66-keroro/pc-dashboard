@@ -99,7 +99,11 @@ class DataProcessor:
 
             # Use original Japanese column names for conversion
             if '入力日時' in df.columns:
+                # to_datetimeでパースし、NaTは除外
                 df['入力日時'] = pd.to_datetime(df['入力日時'], format='%Y/%m/%d %H:%M', errors='coerce')
+                df.dropna(subset=['入力日時'], inplace=True)
+                # DBに保存する前に、一貫した文字列フォーマットに変換する
+                df['入力日時'] = df['入力日時'].dt.strftime('%Y-%m-%d %H:%M:%S')
 
             numeric_cols = ['指図数量', '実績数量', '累計数量', '残数量']
             for col in numeric_cols:

@@ -124,12 +124,17 @@ def main():
             st.subheader(f"内製/外注の構成比 ({agg_label}ベース)")
             mrp_type_summary = filtered_df.groupby('mrp_type')[agg_column].sum().reset_index()
             mrp_type_summary['percentage'] = (mrp_type_summary[agg_column] / mrp_type_summary[agg_column].sum())
-            chart = alt.Chart(mrp_type_summary).mark_arc(innerRadius=50).encode(
-                theta=alt.Theta(field=agg_column, type="quantitative"),
-                color=alt.Color(field="mrp_type", type="nominal", title="タイプ"),
-                tooltip=['mrp_type', alt.Tooltip(agg_column, format=',.0f'), alt.Tooltip('percentage', format='.1%')]
+            base = alt.Chart(mrp_type_summary).encode(
+                theta=alt.Theta(field=agg_column, type="quantitative", stack=True),
+                color=alt.Color(field="mrp_type", type="nominal", title="タイプ")
             )
-            st.altair_chart(chart, use_container_width=True)
+
+            pie = base.mark_arc(outerRadius=120, innerRadius=70)
+            text = base.mark_text(radius=140, size=14).encode(
+                text=alt.Text('percentage', format='.1%')
+            )
+
+            st.altair_chart(pie + text, use_container_width=True)
         st.subheader(f"{agg_label} TOP 10品目")
         top_10_items = filtered_df.groupby('item_text')[agg_column].sum().nlargest(10).sort_values(ascending=True)
         st.bar_chart(top_10_items, horizontal=True)
@@ -156,9 +161,16 @@ def main():
 
     with tab_weekly:
         st.header("週別サマリーレポート")
-        weekly_summary = filtered_df.groupby(['week_category', 'mrp_type'])[agg_column].sum().unstack(fill_value=0)
-        weekly_summary['合計'] = weekly_summary.sum(axis=1)
-        st.dataframe(weekly_summary.style.format("{:,.0f}"), use_container_width=True)
+
+        st.subheader("内製/外注別")
+        weekly_summary_type = filtered_df.groupby(['week_category', 'mrp_type'])[agg_column].sum().unstack(fill_value=0)
+        weekly_summary_type['合計'] = weekly_summary_type.sum(axis=1)
+        st.dataframe(weekly_summary_type.style.format("{:,.0f}"), use_container_width=True)
+
+        st.subheader("MRP管理者別")
+        weekly_summary_ctrl = filtered_df.groupby(['week_category', 'mrp_controller'])[agg_column].sum().unstack(fill_value=0)
+        weekly_summary_ctrl['合計'] = weekly_summary_ctrl.sum(axis=1)
+        st.dataframe(weekly_summary_ctrl.style.format("{:,.0f}"), use_container_width=True)
 
 if __name__ == "__main__":
     main()
