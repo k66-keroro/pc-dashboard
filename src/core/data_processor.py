@@ -49,11 +49,14 @@ class DataProcessor:
         try:
             try:
                 # UTF-8でまず試す (サンプルファイルや通常のテキストはこちら)
+                # 本番ファイルは多列のため、必要な列のみを読み込む
+                use_cols = ['品目', '標準原価']
                 master_df = pd.read_csv(
                     settings.ITEM_MASTER_PATH,
                     sep='\t',
                     dtype={'品目': str, '標準原価': float},
-                    encoding='utf-8'
+                    encoding='utf-8',
+                    usecols=use_cols
                 )
             except UnicodeDecodeError:
                 # UTF-8で失敗した場合、UTF-16で再試行 (BOM付きファイルなど)
@@ -62,7 +65,8 @@ class DataProcessor:
                     settings.ITEM_MASTER_PATH,
                     sep='\t',
                     dtype={'品目': str, '標準原価': float},
-                    encoding='utf-16'
+                    encoding='utf-16',
+                    usecols=use_cols
                 )
             master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
 
