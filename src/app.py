@@ -170,6 +170,10 @@ def main():
         st.subheader("MRP管理者別")
         weekly_summary_ctrl = filtered_df.groupby(['week_category', 'mrp_controller'])[agg_column].sum().unstack(fill_value=0)
         weekly_summary_ctrl['合計'] = weekly_summary_ctrl.sum(axis=1)
+        # Add grand total row
+        total_row_ctrl = weekly_summary_ctrl.sum()
+        total_row_ctrl.name = '合計'
+        weekly_summary_ctrl = pd.concat([weekly_summary_ctrl, pd.DataFrame(total_row_ctrl).T])
         st.dataframe(weekly_summary_ctrl.style.format("{:,.0f}"), use_container_width=True)
 
 if __name__ == "__main__":
