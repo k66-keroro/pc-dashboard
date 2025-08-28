@@ -54,6 +54,12 @@ class DataProcessor:
             )
             master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
 
+            # CSV内に重複がある場合に備え、最後のレコードを正とする
+            initial_rows = len(master_df)
+            master_df.drop_duplicates(subset=['item_code'], keep='last', inplace=True)
+            if initial_rows > len(master_df):
+                logger.warning(f"CSVマスター内で{initial_rows - len(master_df)}件の重複を検出し、最新のデータで上書きしました。")
+
             cursor = self.db_conn.cursor()
 
             logger.info("既存の品目マスターデータを削除します...")
