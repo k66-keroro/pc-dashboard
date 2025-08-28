@@ -47,11 +47,23 @@ class DataProcessor:
         """
         logger.info(f"品目マスターの同期（洗い替え）を開始します: {settings.ITEM_MASTER_PATH}")
         try:
-            master_df = pd.read_csv(
-                settings.ITEM_MASTER_PATH,
-                sep='\t',
-                dtype={'品目': str, '標準原価': float}
-            )
+            try:
+                # UTF-8でまず試す (サンプルファイルや通常のテキストはこちら)
+                master_df = pd.read_csv(
+                    settings.ITEM_MASTER_PATH,
+                    sep='\t',
+                    dtype={'品目': str, '標準原価': float},
+                    encoding='utf-8'
+                )
+            except UnicodeDecodeError:
+                # UTF-8で失敗した場合、UTF-16で再試行 (BOM付きファイルなど)
+                logger.warning("UTF-8での読み込みに失敗しました。UTF-16で再試行します。")
+                master_df = pd.read_csv(
+                    settings.ITEM_MASTER_PATH,
+                    sep='\t',
+                    dtype={'品目': str, '標準原価': float},
+                    encoding='utf-16'
+                )
             master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
 
             # 品目コードの空白を除去
