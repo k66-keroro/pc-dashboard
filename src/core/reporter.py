@@ -29,6 +29,10 @@ class ReportGenerator:
         レポート生成に必要な列（週区分など）をDataFrameに追加する。
         """
         logger.info("レポート用の列を追加しています...")
+        # '入力日時'をdatetimeオブジェクトに変換
+        self.df['入力日時'] = pd.to_datetime(self.df['入力日時'], errors='coerce')
+        self.df.dropna(subset=['入力日時'], inplace=True)
+
         # '入力日時'から日付部分を抽出し、'完成日'を作成
         self.df['completion_date'] = self.df['入力日時'].dt.date
 
