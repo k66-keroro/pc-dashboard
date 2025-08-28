@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import altair as alt
+import sys
 
 from src.models.database import get_db_connection
 from src.utils.report_helpers import get_week_of_month, get_mrp_type
@@ -62,6 +63,11 @@ def main():
     """
     Streamlitダッシュボードのメイン関数
     """
+    # --prod フラグがあるか確認し、本番モードに設定
+    # Streamlitでは `streamlit run app.py -- --prod` のように -- の後に引数を渡す
+    if "--prod" in sys.argv:
+        settings.initialize_production_paths()
+
     st.title("PC製造部門向けダッシュボード")
     df = load_and_prepare_data()
 
@@ -141,8 +147,11 @@ def main():
 
     with tab_details:
         st.header("生産実績明細データ")
-        display_cols = ['mrp_controller', 'completion_date', 'order_number', 'item_code', 'item_text', 'order_quantity', 'actual_quantity', 'amount', 'week_category']
-        display_df = filtered_df[display_cols].rename(columns={
+        display_cols_internal = [
+            'mrp_controller', 'completion_date', 'order_number', 'item_code',
+            'item_text', 'order_quantity', 'actual_quantity', 'amount', 'week_category'
+        ]
+        display_df = filtered_df[display_cols_internal].rename(columns={
             'mrp_controller': 'MRP管理者', 'completion_date': '完成日', 'order_number': '指図',
             'item_code': '品目コード', 'item_text': '品目テキスト', 'order_quantity': '計画数',
             'actual_quantity': '完成数', 'amount': '金額', 'week_category': '週区分'
@@ -165,15 +174,19 @@ def main():
         st.subheader("内製/外注別")
         weekly_summary_type = filtered_df.groupby(['week_category', 'mrp_type'])[agg_column].sum().unstack(fill_value=0)
         weekly_summary_type['合計'] = weekly_summary_type.sum(axis=1)
+        total_row_type = weekly_summary_type.sum()
+        total_row_type.name = '合計'
+        weekly_summary_type = pd.concat([weekly_summary_type, pd.DataFrame(total_row_type).T])
+        weekly_summary_type.index = weekly_summary_type.index.astype(str) # Arrowエラー対策
         st.dataframe(weekly_summary_type.style.format("{:,.0f}"), use_container_width=True)
 
         st.subheader("MRP管理者別")
         weekly_summary_ctrl = filtered_df.groupby(['week_category', 'mrp_controller'])[agg_column].sum().unstack(fill_value=0)
         weekly_summary_ctrl['合計'] = weekly_summary_ctrl.sum(axis=1)
-        # Add grand total row
         total_row_ctrl = weekly_summary_ctrl.sum()
         total_row_ctrl.name = '合計'
         weekly_summary_ctrl = pd.concat([weekly_summary_ctrl, pd.DataFrame(total_row_ctrl).T])
+        weekly_summary_ctrl.index = weekly_summary_ctrl.index.astype(str) # Arrowエラー対策
         st.dataframe(weekly_summary_ctrl.style.format("{:,.0f}"), use_container_width=True)
 
 if __name__ == "__main__":

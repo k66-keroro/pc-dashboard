@@ -54,6 +54,10 @@ class DataProcessor:
             )
             master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
 
+            # 品目コードの空白を除去
+            if 'item_code' in master_df.columns:
+                master_df['item_code'] = master_df['item_code'].str.strip()
+
             # CSV内に重複がある場合に備え、最後のレコードを正とする
             initial_rows = len(master_df)
             master_df.drop_duplicates(subset=['item_code'], keep='last', inplace=True)
@@ -94,6 +98,10 @@ class DataProcessor:
             )
             df.columns = df.columns.str.strip()
             df = df.where(pd.notna(df), None)
+
+            # 品目コードの空白を除去
+            if '品目コード' in df.columns:
+                df['品目コード'] = df['品目コード'].str.strip()
 
             # MRP管理者が'PC'で始まるレコードのみを対象とする
             original_rows = len(df)

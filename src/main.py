@@ -81,7 +81,16 @@ def main():
         action='store_true',
         help='品目マスターCSVをデータベースに同期して終了します。'
     )
+    parser.add_argument(
+        '--prod',
+        action='store_true',
+        help='本番モードで実行し、ネットワークパス上のファイルを参照します。'
+    )
     args = parser.parse_args()
+
+    # 本番モードの場合は、設定を本番用に切り替え
+    if args.prod:
+        settings.initialize_production_paths()
 
     logger.info("PC製造ダッシュボード - バックエンドサービス v2.1 開始")
 
