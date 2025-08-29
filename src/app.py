@@ -63,10 +63,12 @@ def main():
     """
     Streamlitダッシュボードのメイン関数
     """
-    # --prod フラグがあるか確認し、本番モードに設定
-    # Streamlitでは `streamlit run app.py -- --prod` のように -- の後に引数を渡す
-    if "--prod" in sys.argv:
-        settings.initialize_production_paths()
+    # --prod フラグを認識させるためのダミー処理。
+    # 実際のパス切り替えは、データを書き込むmain.py側で行われる。
+    # UIは常に同じDBファイルを読む。
+    is_prod = "--prod" in sys.argv
+    if is_prod:
+        st.info("本番モードで実行中（表示データは本番DBを参照します）")
 
     st.title("PC製造部門向けダッシュボード")
     df = load_and_prepare_data()
