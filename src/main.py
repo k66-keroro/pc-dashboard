@@ -3,6 +3,7 @@ import argparse
 import logging
 import time
 from pathlib import Path
+import sqlite3
 
 from src.models.database import get_db_connection
 from src.models.migration_manager import apply_migrations
