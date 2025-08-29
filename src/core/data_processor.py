@@ -48,12 +48,12 @@ class DataProcessor:
         logger.info(f"品目マスターの同期（洗い替え）を開始します: {settings.ITEM_MASTER_PATH}")
         try:
             try:
-                # UTF-8でまず試す (サンプルファイルや通常のテキストはこちら)
-                # 本番ファイルは多列のため、必要な列のみを読み込む
+                # 区切り文字を自動検出するために sep=None, engine='python' を使用
                 use_cols = ['品目', '標準原価']
                 master_df = pd.read_csv(
                     settings.ITEM_MASTER_PATH,
-                    sep='\t',
+                    sep=None,
+                    engine='python',
                     dtype={'品目': str, '標準原価': float},
                     encoding='utf-8',
                     usecols=use_cols
@@ -63,7 +63,8 @@ class DataProcessor:
                 logger.warning("UTF-8での読み込みに失敗しました。UTF-16で再試行します。")
                 master_df = pd.read_csv(
                     settings.ITEM_MASTER_PATH,
-                    sep='\t',
+                    sep=None,
+                    engine='python',
                     dtype={'品目': str, '標準原価': float},
                     encoding='utf-16',
                     usecols=use_cols
