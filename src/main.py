@@ -15,12 +15,26 @@ from src.utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
+import datetime
+
 def run_pipeline(conn: sqlite3.Connection, data_path: Path):
     """
     一回のデータ処理パイプラインを実行する。
     """
     logger.info("パイプライン処理を開始します。")
     try:
+        # 【診断用】ファイルの最終更新日時をログに出力
+        try:
+            if data_path.exists():
+                mod_time_ts = os.path.getmtime(data_path)
+                mod_time = datetime.datetime.fromtimestamp(mod_time_ts)
+                logger.info(f"読み込み対象ファイルの最終更新日時: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            else:
+                logger.warning(f"データファイルが見つかりません: {data_path}")
+                return # このサイクルの処理をスキップ
+        except Exception as e:
+            logger.error(f"ファイルの最終更新日時取得中にエラー: {e}")
+
         processor = DataProcessor(conn)
         summary = processor.process_file_and_load_to_db(data_path)
 
