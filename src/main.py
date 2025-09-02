@@ -113,11 +113,40 @@ def main():
             logger.info("品目マスターの同期が完了しました。プログラムを終了します。")
             sys.exit(0)
 
-        logger.info("常駐サービスモードで起動します。1時間ごとにデータ処理を実行します。")
+        logger.info("常駐サービスモードで起動します。毎時3分にデータ処理を実行します。")
+        last_processed_mod_time = None
         while True:
-            run_pipeline(conn, data_path)
-            logger.info("次の実行まで1時間待機します...")
-            time.sleep(3600)
+            try:
+                if data_path.exists():
+                    current_mod_time = os.path.getmtime(data_path)
+                    if current_mod_time == last_processed_mod_time:
+                        logger.info(f"データファイル({data_path.name})は更新されていません。処理をスキップします。")
+                    else:
+                        logger.info(f"データファイル({data_path.name})の更新を検出しました。")
+                        run_pipeline(conn, data_path)
+                        last_processed_mod_time = current_mod_time
+                else:
+                    logger.warning(f"データファイルが見つかりません: {data_path}。次のサイクルまで待機します。")
+            except Exception as e:
+                logger.error(f"ファイルチェックまたはパイプライン実行中に予期せぬエラーが発生しました: {e}", exc_info=True)
+
+            now = datetime.datetime.now()
+            # まず現在の時間の3分時点を基準とする
+            next_run = now.replace(minute=3, second=0, microsecond=0)
+
+            # もし現在の時刻が基準を過ぎていれば、次の実行は1時間後
+            if now.minute >= 3:
+                next_run += datetime.timedelta(hours=1)
+
+            wait_seconds = (next_run - now).total_seconds()
+
+            # sleep時間が負にならないように最低でも1秒は待つ
+            if wait_seconds <= 0:
+                logger.warning("次の実行時刻が過去になりました。1時間後の次のサイクルを試みます。")
+                wait_seconds = (next_run + datetime.timedelta(hours=1) - now).total_seconds()
+
+            logger.info(f"次の実行は {next_run.strftime('%Y-%m-%d %H:%M:%S')} です。({wait_seconds:,.0f}秒後)")
+            time.sleep(wait_seconds)
 
     except Exception as e:
         logger.critical(f"アプリケーションの起動またはマイグレーション中に致命的なエラーが発生しました: {e}", exc_info=True)

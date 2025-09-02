@@ -79,6 +79,11 @@ def main():
 
     # --- サイドバー ---
     st.sidebar.header("表示設定")
+
+    if st.sidebar.button('表示を更新', use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
     min_date = df['completion_date'].min()
     max_date = df['completion_date'].max()
     start_date, end_date = st.sidebar.date_input(
