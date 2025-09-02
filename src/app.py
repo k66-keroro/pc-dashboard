@@ -7,6 +7,7 @@ import sys
 from src.models.database import get_db_connection
 from src.utils.report_helpers import get_week_of_month, get_mrp_type
 from src.config import settings
+from dateutil.relativedelta import relativedelta
 
 st.set_page_config(layout="wide", page_title="PC製造部門向けダッシュボード")
 
@@ -85,9 +86,27 @@ def main():
         st.rerun()
 
     min_date = df['completion_date'].min()
-    max_date = df['completion_date'].max()
+
+    # --- 日付選択の最大値を、データ上の最新日 or 今日のどちらか未来日に設定 ---
+    today = datetime.date.today()
+    max_date_from_data = df['completion_date'].max() if not df.empty else None
+    max_date = max(max_date_from_data, today) if max_date_from_data else today
+
+    # --- 月替わりを考慮したデフォルト日付の計算 ---
+    # 月の初め（3日以下）の場合、前月をデフォルト表示
+    if today.day <= 3:
+        default_start_date = (today - relativedelta(months=1)).replace(day=1)
+        default_end_date = today.replace(day=1) - datetime.timedelta(days=1)
+    else:
+        default_start_date = today.replace(day=1)
+        default_end_date = today
+
+    # デフォルト日付がデータ範囲内に収まるように調整
+    default_start_date = max(default_start_date, min_date)
+    default_end_date = min(default_end_date, max_date)
+
     start_date, end_date = st.sidebar.date_input(
-        "期間を選択", value=(min_date, max_date),
+        "期間を選択", value=(default_start_date, default_end_date),
         min_value=min_date, max_value=max_date, format="YYYY/MM/DD"
     )
     agg_target = st.sidebar.radio("集計対象", ('金額', '実績数量'), horizontal=True)
