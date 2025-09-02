@@ -81,6 +81,30 @@ def main():
     # --- サイドバー ---
     st.sidebar.header("表示設定")
 
+    # --- 最終更新日時の表示 ---
+    try:
+        with open(settings.LAST_UPDATE_LOG_PATH, 'r', encoding='utf-8') as f:
+            last_update_time = f.read().strip()
+        st.sidebar.caption(f"最終データ更新:  \n**{last_update_time}**")
+    except FileNotFoundError:
+        st.sidebar.caption("最終データ更新: N/A")
+    except Exception as e:
+        st.sidebar.caption(f"更新日時の取得に失敗")
+
+    st.sidebar.divider()
+
+    # --- 月選択 ---
+    # データから月のリストを生成
+    month_list = df['completion_date'].dt.to_period('M').unique().astype(str).tolist()
+    month_list.sort(reverse=True)
+
+    selected_month = st.sidebar.selectbox(
+        "月を選択して期間をセット",
+        options=month_list,
+        index=0 # Default to the most recent month
+    )
+    st.sidebar.divider()
+
     if st.sidebar.button('表示を更新', use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -92,21 +116,20 @@ def main():
     max_date_from_data = df['completion_date'].max() if not df.empty else None
     max_date = max(max_date_from_data, today) if max_date_from_data else today
 
-    # --- 月替わりを考慮したデフォルト日付の計算 ---
-    # 月の初め（3日以下）の場合、前月をデフォルト表示
-    if today.day <= 3:
-        default_start_date = (today - relativedelta(months=1)).replace(day=1)
-        default_end_date = today.replace(day=1) - datetime.timedelta(days=1)
-    else:
-        default_start_date = today.replace(day=1)
-        default_end_date = today
+    # --- 選択された月に基づいて日付範囲を設定 ---
+    if selected_month:
+        start_of_month = pd.to_datetime(selected_month).date()
+        end_of_month = (start_of_month + relativedelta(months=1)) - datetime.timedelta(days=1)
+    else: # Fallback if list is empty
+        start_of_month = today.replace(day=1)
+        end_of_month = today
 
-    # デフォルト日付がデータ範囲内に収まるように調整
-    default_start_date = max(default_start_date, min_date)
-    default_end_date = min(default_end_date, max_date)
+    # 選択された日付範囲がデータ範囲内に収まるように調整
+    # ただし、選択した月の最終日より未来のデータがある場合も考慮する
+    end_of_month = min(end_of_month, max_date)
 
     start_date, end_date = st.sidebar.date_input(
-        "期間を選択", value=(default_start_date, default_end_date),
+        "期間を微調整", value=(start_of_month, end_of_month),
         min_value=min_date, max_value=max_date, format="YYYY/MM/DD"
     )
     agg_target = st.sidebar.radio("集計対象", ('金額', '実績数量'), horizontal=True)
@@ -190,9 +213,62 @@ def main():
 
     with tab_daily:
         st.header("日別サマリーレポート")
-        daily_summary = filtered_df.groupby(['week_category', 'completion_date', 'mrp_controller'])[agg_column].sum().unstack(fill_value=0)
-        daily_summary['日別合計'] = daily_summary.sum(axis=1)
-        st.dataframe(daily_summary.style.format("{:,.0f}"), use_container_width=True)
+
+        if filtered_df.empty:
+            st.warning("この期間のデータはありません。")
+        else:
+            # --- データ集計 ---
+            # 日付ごとに主要な統計値を計算
+            daily_summary_df = filtered_df.groupby('completion_date').agg(
+                sum_val=(agg_column, 'sum'),
+                mean_val=(agg_column, 'mean'),
+                min_val=(agg_column, 'min'),
+                max_val=(agg_column, 'max'),
+            ).reset_index()
+
+            # --- UIコントロール ---
+            stat_to_show = st.selectbox(
+                "表示する統計値を選択してください",
+                options=['合計', '平均', '最大', '最小'],
+                key='daily_stat_selector'
+            )
+
+            stat_column_map = {
+                '合計': 'sum_val',
+                '平均': 'mean_val',
+                '最小': 'min_val',
+                '最大': 'max_val'
+            }
+            selected_stat_col = stat_column_map[stat_to_show]
+
+            # --- グラフ表示 ---
+            st.subheader(f"日別 {stat_to_show} ({agg_label}) の推移")
+            st.bar_chart(daily_summary_df.rename(columns={'completion_date': '日付'}) , x='日付', y=selected_stat_col)
+
+            # --- 詳細データテーブル表示 ---
+            st.subheader(f"日別統計データ ({agg_label})")
+            display_cols = {
+                'completion_date': '日付',
+                'sum_val': '合計',
+                'mean_val': '平均',
+                'min_val': '最小',
+                'max_val': '最大'
+            }
+
+            # 金額か数量かでフォーマットを切り替える
+            is_amount = agg_column == 'amount'
+            st.dataframe(
+                daily_summary_df.rename(columns=display_cols),
+                column_config={
+                    "日付": st.column_config.DateColumn("日付", format="YYYY/MM/DD"),
+                    "合計": st.column_config.NumberColumn(format="¥%,.0f" if is_amount else "%,.0f"),
+                    "平均": st.column_config.NumberColumn(format="¥%,.1f" if is_amount else "%,.1f"),
+                    "最小": st.column_config.NumberColumn(format="¥%,.0f" if is_amount else "%,.0f"),
+                    "最大": st.column_config.NumberColumn(format="¥%,.0f" if is_amount else "%,.0f"),
+                },
+                use_container_width=True,
+                hide_index=True
+            )
 
     with tab_weekly:
         st.header("週別サマリーレポート")

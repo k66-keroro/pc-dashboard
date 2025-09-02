@@ -125,6 +125,15 @@ def main():
                         logger.info(f"データファイル({data_path.name})の更新を検出しました。")
                         run_pipeline(conn, data_path)
                         last_processed_mod_time = current_mod_time
+
+                        # Record the update time for the dashboard
+                        try:
+                            update_time_str = datetime.datetime.fromtimestamp(current_mod_time).strftime('%Y-%m-%d %H:%M:%S')
+                            with open(settings.LAST_UPDATE_LOG_PATH, 'w', encoding='utf-8') as f:
+                                f.write(update_time_str)
+                            logger.info(f"ダッシュボード用の最終更新日時を記録しました: {update_time_str}")
+                        except Exception as e:
+                            logger.error(f"最終更新日時の記録中にエラーが発生しました: {e}")
                 else:
                     logger.warning(f"データファイルが見つかりません: {data_path}。次のサイクルまで待機します。")
             except Exception as e:

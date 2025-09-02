@@ -23,6 +23,9 @@ PROD_MASTER_PATH = Path(r"\\SAPIF01\host\JOHODBDL\TEIKEI\MASTER\HINMOKU\MARA_DL.
 DEV_DATA_PATH = SAMPLE_DATA_DIR / "KANSEI_JISSEKI.txt"
 DEV_MASTER_PATH = SAMPLE_DATA_DIR / "MARA_DL.csv"
 
+# Path for dashboard update timestamp
+LAST_UPDATE_LOG_PATH = DATA_DIR / "last_update.log"
+
 
 # 4. --- Logging ---
 LOG_FILE_NAME = "app.log"
