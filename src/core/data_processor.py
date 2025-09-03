@@ -6,7 +6,8 @@ import sqlite3
 
 from pydantic import ValidationError
 from src.models.production import ProductionRecord
-from src.models.database import insert_production_records
+from src.models.inventory import InventoryRecord
+from src.models.database import insert_production_records, insert_inventory_records
 
 logger = logging.getLogger(__name__)
 
@@ -169,4 +170,45 @@ class DataProcessor:
             return summary
         except Exception as e:
             logger.error(f"ファイル処理中にエラーが発生しました: {data_path}, Error: {e}", exc_info=True)
+            return {"file": str(data_path), "status": "failed", "error": str(e)}
+
+    def process_inventory_file_and_load_to_db(self, data_path: Path) -> dict:
+        logging.info(f"在庫ファイル処理を開始します: {data_path}")
+        try:
+            # Excelファイルを読み込む
+            # Pydanticモデルのエイリアスから必要な列を特定
+            expected_columns = [
+                field.alias for field in InventoryRecord.model_fields.values() if field.alias
+            ]
+            # ヘッダーが2行目にあると仮定し、最初の行をスキップする
+            df = pd.read_excel(data_path, skiprows=1, engine='openpyxl', usecols=expected_columns)
+            df.columns = df.columns.map(str) # カラム名を文字列に変換
+            df = df.where(pd.notna(df), None)
+
+            # Pydanticモデルでバリデーション
+            valid_records, invalid_records = [], []
+            for record_dict in df.to_dict(orient='records'):
+                try:
+                    # Pydanticモデルのエイリアスを使ってバリデーション
+                    valid_records.append(InventoryRecord(**record_dict))
+                except ValidationError as e:
+                    logger.warning(f"在庫データのバリデーションエラー: {e.errors()} | データ: {record_dict}")
+                    invalid_records.append({'data': record_dict, 'errors': e.errors()})
+
+            if valid_records:
+                insert_inventory_records(self.db_conn, valid_records)
+                logger.info(f"{len(valid_records)}件の有効な在庫レコードをデータベースに挿入しました。")
+
+            summary = {
+                "file": str(data_path), "total_rows": len(df),
+                "successful_inserts": len(valid_records), "failed_rows": len(invalid_records)
+            }
+            logging.info(f"在庫ファイル処理が完了しました: {summary}")
+            return summary
+
+        except FileNotFoundError:
+            logger.error(f"在庫ファイルが見つかりません: {data_path}")
+            raise
+        except Exception as e:
+            logger.error(f"在庫ファイル処理中にエラーが発生しました: {data_path}, Error: {e}", exc_info=True)
             return {"file": str(data_path), "status": "failed", "error": str(e)}

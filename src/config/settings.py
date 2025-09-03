@@ -19,9 +19,13 @@ DB_PATH = DB_DIR / DB_NAME
 PROD_DATA_PATH = Path(r"\\SAPIF01\host\MES\KANSEI_JISSEKI.txt")
 PROD_MASTER_PATH = Path(r"\\SAPIF01\host\JOHODBDL\TEIKEI\MASTER\HINMOKU\MARA_DL.csv")
 
+# Production paths (network drives)
+PROD_INVENTORY_PATH = Path(r"\\SAPIF01\host\MES\dbo_提出用_経理_滞留在庫資料_通常.xlsx")
+
 # Development paths (local sample files)
 DEV_DATA_PATH = SAMPLE_DATA_DIR / "KANSEI_JISSEKI.txt"
 DEV_MASTER_PATH = SAMPLE_DATA_DIR / "MARA_DL.csv"
+DEV_INVENTORY_PATH = SAMPLE_DATA_DIR / "dbo_提出用_経理_滞留在庫資料_通常.xlsx"
 
 
 # 4. --- Logging ---

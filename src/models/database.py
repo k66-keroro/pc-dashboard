@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List
 
 from src.models.production import ProductionRecord
+from src.models.inventory import InventoryRecord
 from src.config import settings
 
 def get_db_connection(db_path: Path = settings.DB_PATH) -> sqlite3.Connection:
@@ -107,6 +108,55 @@ def insert_production_records(conn: sqlite3.Connection, records: List[Production
         ) for r in records
     ]
 
+    cursor = conn.cursor()
+    cursor.executemany(sql, data_to_insert)
+    conn.commit()
+
+def create_inventory_table(conn: sqlite3.Connection):
+    """
+    `inventory_records`テーブルを作成する。
+    """
+    sql_create_table = """
+    CREATE TABLE IF NOT EXISTS inventory_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_code TEXT NOT NULL,
+        item_text TEXT,
+        storage_location TEXT,
+        inventory_date DATE NOT NULL,
+        days_stagnant INTEGER,
+        quantity REAL NOT NULL,
+        unit TEXT,
+        amount_jpy REAL NOT NULL,
+        currency TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(item_code, inventory_date, storage_location)
+    );
+    """
+    sql_create_index_item_code = "CREATE INDEX IF NOT EXISTS idx_inventory_item_code ON inventory_records (item_code);"
+    sql_create_index_date = "CREATE INDEX IF NOT EXISTS idx_inventory_date ON inventory_records (inventory_date);"
+
+    cursor = conn.cursor()
+    cursor.execute(sql_create_table)
+    cursor.execute(sql_create_index_item_code)
+    cursor.execute(sql_create_index_date)
+    conn.commit()
+
+def insert_inventory_records(conn: sqlite3.Connection, records: List[InventoryRecord]):
+    """
+    複数の滞留在庫レコードをデータベースに一括で挿入または置換する。
+    """
+    sql = """
+    INSERT OR REPLACE INTO inventory_records (
+        item_code, item_text, storage_location, inventory_date, days_stagnant,
+        quantity, unit, amount_jpy, currency
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """
+    data_to_insert = [
+        (
+            r.item_code, r.item_text, r.storage_location, r.inventory_date, r.days_stagnant,
+            r.quantity, r.unit, r.amount_jpy, r.currency
+        ) for r in records
+    ]
     cursor = conn.cursor()
     cursor.executemany(sql, data_to_insert)
     conn.commit()

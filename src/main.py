@@ -18,35 +18,43 @@ logger = logging.getLogger(__name__)
 
 import datetime
 
-def run_pipeline(conn: sqlite3.Connection, data_path: Path):
+def run_pipeline(conn: sqlite3.Connection, prod_data_path: Path, inventory_path: Path):
     """
     一回のデータ処理パイプラインを実行する。
     """
     logger.info("パイプライン処理を開始します。")
     try:
-        # 【診断用】ファイルの最終更新日時をログに出力
-        try:
-            if data_path.exists():
-                mod_time_ts = os.path.getmtime(data_path)
-                mod_time = datetime.datetime.fromtimestamp(mod_time_ts)
-                logger.info(f"読み込み対象ファイルの最終更新日時: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            else:
-                logger.warning(f"データファイルが見つかりません: {data_path}")
-                return # このサイクルの処理をスキップ
-        except Exception as e:
-            logger.error(f"ファイルの最終更新日時取得中にエラー: {e}")
-
         processor = DataProcessor(conn)
-        summary = processor.process_file_and_load_to_db(data_path)
 
-        logger.info("========== 処理結果サマリー ==========")
-        logger.info(f"  ファイル: {summary.get('file')}")
-        logger.info(f"  総行数: {summary.get('total_rows')}")
-        logger.info(f"  成功した挿入件数: {summary.get('successful_inserts')}")
-        logger.info(f"  失敗した行数: {summary.get('failed_rows')}")
-        logger.info("========================================")
+        # 1. 生産実績データの処理
+        if prod_data_path.exists():
+            logger.info(f"生産実績ファイルの処理を開始: {prod_data_path}")
+            prod_summary = processor.process_file_and_load_to_db(prod_data_path)
+            logger.info("========== 生産実績 処理結果サマリー ==========")
+            logger.info(f"  ファイル: {prod_summary.get('file')}")
+            logger.info(f"  総行数: {prod_summary.get('total_rows')}")
+            logger.info(f"  成功した挿入件数: {prod_summary.get('successful_inserts')}")
+            logger.info(f"  失敗した行数: {prod_summary.get('failed_rows')}")
+            logger.info("============================================")
+        else:
+            logger.warning(f"生産実績データファイルが見つかりません: {prod_data_path}")
+            prod_summary = {'successful_inserts': 0}
 
-        if summary.get('successful_inserts', 0) > 0:
+        # 2. 在庫データの処理
+        if inventory_path.exists():
+            logger.info(f"在庫データファイルの処理を開始: {inventory_path}")
+            inv_summary = processor.process_inventory_file_and_load_to_db(inventory_path)
+            logger.info("========== 在庫データ 処理結果サマリー ==========")
+            logger.info(f"  ファイル: {inv_summary.get('file')}")
+            logger.info(f"  総行数: {inv_summary.get('total_rows')}")
+            logger.info(f"  成功した挿入件数: {inv_summary.get('successful_inserts')}")
+            logger.info(f"  失敗した行数: {inv_summary.get('failed_rows')}")
+            logger.info("============================================")
+        else:
+            logger.warning(f"在庫データファイルが見つかりません: {inventory_path}")
+
+        # 分析とレポート生成は、生産実績データが処理された場合のみ実行
+        if prod_summary.get('successful_inserts', 0) > 0:
             # 分析とレポート生成は、処理されたデータがある場合のみ実行
             logger.info("========== 生産実績サマリー ==========")
             analytics = ProductionAnalytics(conn)
@@ -84,19 +92,23 @@ def main():
     parser = argparse.ArgumentParser(description="PC製造ダッシュボードのデータ処理サービス")
     parser.add_argument('--sync-master', action='store_true', help='品目マスターCSVをデータベースに同期して終了します。')
     parser.add_argument('--prod', action='store_true', help='本番モードで実行し、ネットワークパス上のファイルを参照します。')
+    parser.add_argument('--run-once', action='store_true', help='パイプラインを1回だけ実行して終了します。')
     args = parser.parse_args()
 
     # モードに応じてパスを設定
     if args.prod:
         logger.info("本番モードで実行します。")
-        data_path = settings.PROD_DATA_PATH
+        prod_data_path = settings.PROD_DATA_PATH
         master_path = settings.PROD_MASTER_PATH
+        inventory_path = settings.PROD_INVENTORY_PATH
     else:
         logger.info("開発モードで実行します。")
-        data_path = settings.DEV_DATA_PATH
+        prod_data_path = settings.DEV_DATA_PATH
         master_path = settings.DEV_MASTER_PATH
+        inventory_path = settings.DEV_INVENTORY_PATH
 
-    logger.info(f"データソース: {data_path}")
+    logger.info(f"生産実績データソース: {prod_data_path}")
+    logger.info(f"在庫データソース: {inventory_path}")
     logger.info(f"マスターソース: {master_path}")
 
     logger.info("PC製造ダッシュボード - バックエンドサービス v2.2 開始")
@@ -113,11 +125,15 @@ def main():
             logger.info("品目マスターの同期が完了しました。プログラムを終了します。")
             sys.exit(0)
 
-        logger.info("常駐サービスモードで起動します。1時間ごとにデータ処理を実行します。")
-        while True:
-            run_pipeline(conn, data_path)
-            logger.info("次の実行まで1時間待機します...")
-            time.sleep(3600)
+        if args.run_once:
+            logger.info("シングルランモードで実行します。")
+            run_pipeline(conn, prod_data_path, inventory_path)
+        else:
+            logger.info("常駐サービスモードで起動します。1時間ごとにデータ処理を実行します。")
+            while True:
+                run_pipeline(conn, prod_data_path, inventory_path)
+                logger.info("次の実行まで1時間待機します...")
+                time.sleep(3600)
 
     except Exception as e:
         logger.critical(f"アプリケーションの起動またはマイグレーション中に致命的なエラーが発生しました: {e}", exc_info=True)
