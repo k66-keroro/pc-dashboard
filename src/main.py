@@ -9,6 +9,7 @@ import sqlite3
 from src.models.database import get_db_connection
 from src.models.migration_manager import apply_migrations
 from src.core.data_processor import DataProcessor
+from src.core.wip_processor import WipDataProcessor
 from src.core.analytics import ProductionAnalytics, ErrorDetection
 from src.core.reporter import ReportGenerator
 from src.config import settings
@@ -83,6 +84,7 @@ def main():
     setup_logging()
     parser = argparse.ArgumentParser(description="PC製造ダッシュボードのデータ処理サービス")
     parser.add_argument('--sync-master', action='store_true', help='品目マスターCSVをデータベースに同期して終了します。')
+    parser.add_argument('--sync-wip', action='store_true', help='仕掛関連ファイルをデータベースに同期して終了します。')
     parser.add_argument('--prod', action='store_true', help='本番モードで実行し、ネットワークパス上のファイルを参照します。')
     args = parser.parse_args()
 
@@ -111,6 +113,17 @@ def main():
         if args.sync_master:
             data_processor.sync_master_from_csv(master_path)
             logger.info("品目マスターの同期が完了しました。プログラムを終了します。")
+            sys.exit(0)
+
+        elif args.sync_wip:
+            wip_processor = WipDataProcessor(conn)
+            # 現時点では開発パスのみを対象とする
+            wip_processor.run_all(
+                wip_details_path=settings.DEV_WIP_DETAILS_PATH,
+                zp58_path=settings.DEV_ZP58_PATH,
+                zp02_path=settings.DEV_ZP02_PATH
+            )
+            logger.info("仕掛関連ファイルの同期が完了しました。プログラムを終了します。")
             sys.exit(0)
 
         logger.info("常駐サービスモードで起動します。1時間ごとにデータ処理を実行します。")

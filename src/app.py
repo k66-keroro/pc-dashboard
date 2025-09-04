@@ -6,7 +6,7 @@ import sys
 
 from src.models.database import get_db_connection
 from src.utils.report_helpers import get_week_of_month, get_mrp_type
-from src.core.analytics import ErrorDetection, InventoryAnalysis
+from src.core.analytics import ErrorDetection, InventoryAnalysis, WipAnalysis
 from src.config import settings
 
 st.set_page_config(layout="wide", page_title="PC製造部門向けダッシュボード")
@@ -121,8 +121,9 @@ def main():
     kpi_cols_period[3].metric("総指図数", f"{period_kpis['unique_orders']}")
 
     # --- タブ表示 ---
-    tabs_list = ["グラフ分析", "日別レポート", "週別レポート", "明細データ", "エラーレポート", "在庫分析"]
-    tab_graphs, tab_daily, tab_weekly, tab_details, tab_errors, tab_inventory = st.tabs(tabs_list)
+    tabs_list = ["グラフ分析", "日別レポート", "週別レポート", "明細データ", "仕掛進捗分析", "エラーレポート", "在庫分析"]
+    (tab_graphs, tab_daily, tab_weekly, tab_details, tab_wip,
+     tab_errors, tab_inventory) = st.tabs(tabs_list)
 
     with tab_graphs:
         col1, col2 = st.columns([2, 1])
@@ -192,6 +193,30 @@ def main():
         weekly_summary_ctrl = pd.concat([weekly_summary_ctrl, pd.DataFrame(total_row_ctrl).T])
         weekly_summary_ctrl.index = weekly_summary_ctrl.index.astype(str) # Arrowエラー対策
         st.dataframe(weekly_summary_ctrl.style.format("{:,.0f}"), use_container_width=True)
+
+    with tab_wip:
+        st.header("仕掛進捗分析")
+        st.info("全仕掛データと、完了（TECO/DLV）を除いた残高データを「仕掛年齢」別に比較します。")
+
+        conn = get_db_connection()
+        try:
+            wip_analyzer = WipAnalysis(conn)
+            wip_comparison_df = wip_analyzer.get_wip_summary_comparison()
+
+            if not wip_comparison_df.empty:
+                st.subheader("仕掛年齢別 サマリー")
+                st.dataframe(wip_comparison_df.style.format("{:,.0f}"), use_container_width=True, hide_index=True)
+
+                st.download_button(
+                    label="このサマリーをCSVでダウンロード",
+                    data=wip_comparison_df.to_csv(index=False, encoding='utf-8-sig'),
+                    file_name="wip_summary_comparison.csv",
+                    mime='text/csv',
+                )
+            else:
+                st.warning("表示する仕掛データがありません。`--sync-wip`コマンドでデータを同期してください。")
+        finally:
+            conn.close()
 
     with tab_errors:
         st.header("データ整合性チェックレポート")

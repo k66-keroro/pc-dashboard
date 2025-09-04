@@ -191,3 +191,77 @@ class InventoryAnalysis:
         except Exception as e:
             logger.error(f"滞留在庫の分析中にエラーが発生しました: {e}", exc_info=True)
             return pd.DataFrame()
+
+class WipAnalysis:
+    """
+    仕掛品の進捗状況を分析するクラス。
+    """
+    def __init__(self, db_conn: sqlite3.Connection):
+        self.conn = db_conn
+
+    def _get_base_wip_data(self) -> pd.DataFrame:
+        """
+        分析の基礎となる、関連テーブルを結合した仕掛データを取得する。
+        """
+        query = """
+        SELECT
+            d.wip_age,
+            d.amount_jpy,
+            d.item_code,
+            z02.order_status,
+            CASE WHEN z58.order_number IS NOT NULL THEN 1 ELSE 0 END AS has_zp58
+        FROM
+            wip_details d
+        LEFT JOIN
+            zp02_records z02 ON d.order_number = z02.order_number
+        LEFT JOIN
+            zp58_records z58 ON d.order_number = z58.order_number
+        WHERE
+            d.mrp_controller LIKE 'P%';
+        """
+        return pd.read_sql_query(query, self.conn)
+
+    def get_wip_summary_comparison(self) -> pd.DataFrame:
+        """
+        完了品を除外する前と後での仕掛状況を比較したサマリーを返す。
+        """
+        logger.info("仕掛進捗の比較サマリー分析を開始します。")
+        try:
+            base_df = self._get_base_wip_data()
+            if base_df.empty:
+                logger.warning("分析対象の仕掛データがありません。")
+                return pd.DataFrame()
+
+            # 1. 全仕掛データの集計
+            total_agg = base_df.groupby('wip_age').agg(
+                total_amount=('amount_jpy', 'sum'),
+                total_count=('item_code', 'count')
+            ).reset_index()
+
+            # 2. 完了(TECO, DLV)を除いた仕掛データの集計
+            remaining_df = base_df[
+                ~base_df['order_status'].isin(['TECO', 'DLV'])
+            ]
+            remaining_agg = remaining_df.groupby('wip_age').agg(
+                remaining_amount=('amount_jpy', 'sum'),
+                remaining_count=('item_code', 'count')
+            ).reset_index()
+
+            # 3. 二つの集計結果を結合
+            comparison_df = pd.merge(total_agg, remaining_agg, on='wip_age', how='left').fillna(0)
+
+            # 列名を日本語にリネームして最終的な出力とする
+            comparison_df.rename(columns={
+                'wip_age': '仕掛年齢',
+                'total_amount': '当初金額',
+                'total_count': '当初件数',
+                'remaining_amount': '残高金額',
+                'remaining_count': '残高件数'
+            }, inplace=True)
+
+            logger.info("仕掛進捗の比較サマリー分析が完了しました。")
+            return comparison_df
+
+        except Exception as e:
+            logger.error(f"仕掛進捗サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
+            return pd.DataFrame()
