@@ -23,3 +23,8 @@ reports/*
 .idea/
 *.swp
 *.swo
+
+# Obsidian files
+.obsidian/
+PC Dashboard ブラッシュアップ - 実装タスクリスト.md
+PC Dashboard ブラッシュアップ - 要件定義.md
