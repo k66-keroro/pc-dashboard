@@ -14,10 +14,44 @@ from src.core.analytics import ProductionAnalytics, ErrorDetection
 from src.core.reporter import ReportGenerator
 from src.config import settings
 from src.utils.logging_config import setup_logging
+import re
 
 logger = logging.getLogger(__name__)
 
 import datetime
+
+def find_latest_wip_file(directory: Path) -> Path:
+    """
+    指定されたディレクトリ内で、命名規則に一致する最新の仕掛明細ファイルを見つける。
+    ファイル名の例: 202508末_仕掛明細表_WBS集約(仕掛年齢付与)_0901.xlsx
+    """
+    logger.info(f"最新の仕掛明細ファイルを検索します: {directory}")
+    pattern = re.compile(r"(\d{4})\d{2}末_仕掛明細表_WBS集約.*\.xlsx")
+    latest_file = None
+    latest_timestamp = None
+
+    if not directory.is_dir():
+        logger.warning(f"仕掛明細のディレクトリが見つかりません: {directory}")
+        return None
+
+    for f in directory.iterdir():
+        if f.is_file():
+            match = pattern.match(f.name)
+            if match:
+                # ファイル名からタイムスタンプ的な情報を抽出（例：年と末尾の数字）
+                timestamp_str = match.group(1) + f.name.split('_')[-1].split('.')[0]
+                logger.debug(f"ファイル {f.name} からタイムスタンプ {timestamp_str} を抽出しました。")
+                if latest_timestamp is None or timestamp_str > latest_timestamp:
+                    latest_timestamp = timestamp_str
+                    latest_file = f
+
+    if latest_file:
+        logger.info(f"最新の仕掛明細ファイルとして {latest_file.name} を選択しました。")
+    else:
+        logger.warning(f"ディレクトリ {directory} 内に、パターンに一致する仕掛明細ファイルが見つかりませんでした。")
+
+    return latest_file
+
 
 def run_pipeline(conn: sqlite3.Connection, data_path: Path):
     """
@@ -93,10 +127,20 @@ def main():
         logger.info("本番モードで実行します。")
         data_path = settings.PROD_DATA_PATH
         master_path = settings.PROD_MASTER_PATH
+        wip_details_path = find_latest_wip_file(settings.PROD_WIP_DIR)
+        zp58_path = settings.PROD_ZP58_PATH
+        zp02_path = settings.PROD_ZP02_PATH
+        storage_locations_path = settings.PROD_STORAGE_LOCATIONS_PATH
+        zs65_path = settings.PROD_ZS65_PATH
     else:
         logger.info("開発モードで実行します。")
         data_path = settings.DEV_DATA_PATH
         master_path = settings.DEV_MASTER_PATH
+        wip_details_path = settings.DEV_WIP_DETAILS_PATH
+        zp58_path = settings.DEV_ZP58_PATH
+        zp02_path = settings.DEV_ZP02_PATH
+        storage_locations_path = settings.DEV_STORAGE_LOCATIONS_PATH
+        zs65_path = settings.DEV_ZS65_PATH
 
     logger.info(f"データソース: {data_path}")
     logger.info(f"マスターソース: {master_path}")
@@ -116,14 +160,19 @@ def main():
             sys.exit(0)
 
         elif args.sync_wip:
+            if args.prod and not wip_details_path:
+                logger.error("本番モードで実行されましたが、処理対象の仕掛明細ファイルが見つかりませんでした。")
+                sys.exit(1)
+
             wip_processor = WipDataProcessor(conn)
-            # 現時点では開発パスのみを対象とする
             wip_processor.run_all(
-                wip_details_path=settings.DEV_WIP_DETAILS_PATH,
-                zp58_path=settings.DEV_ZP58_PATH,
-                zp02_path=settings.DEV_ZP02_PATH
+                wip_details_path=wip_details_path,
+                zp58_path=zp58_path,
+                zp02_path=zp02_path,
+                storage_locations_path=storage_locations_path,
+                zs65_path=zs65_path
             )
-            logger.info("仕掛関連ファイルの同期が完了しました。プログラムを終了します。")
+            logger.info("仕掛・在庫関連ファイルの同期が完了しました。プログラムを終了します。")
             sys.exit(0)
 
         logger.info("常駐サービスモードで起動します。1時間ごとにデータ処理を実行します。")

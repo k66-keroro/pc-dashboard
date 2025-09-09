@@ -6,7 +6,7 @@ import sys
 
 from src.models.database import get_db_connection
 from src.utils.report_helpers import get_week_of_month, get_mrp_type
-from src.core.analytics import ErrorDetection, InventoryAnalysis, WipAnalysis
+from src.core.analytics import ErrorDetection, InventoryAnalysis, WipAnalysis, PcStockAnalysis
 from src.config import settings
 
 st.set_page_config(layout="wide", page_title="PC製造部門向けダッシュボード")
@@ -121,9 +121,9 @@ def main():
     kpi_cols_period[3].metric("総指図数", f"{period_kpis['unique_orders']}")
 
     # --- タブ表示 ---
-    tabs_list = ["グラフ分析", "日別レポート", "週別レポート", "明細データ", "仕掛進捗分析", "エラーレポート", "在庫分析"]
-    (tab_graphs, tab_daily, tab_weekly, tab_details, tab_wip,
-     tab_errors, tab_inventory) = st.tabs(tabs_list)
+    tabs_list = ["グラフ分析", "日別レポート", "週別レポート", "明細データ", "仕掛進捗分析", "PC在庫分析", "エラーレポート", "在庫分析", "DBビューア"]
+    (tab_graphs, tab_daily, tab_weekly, tab_details, tab_wip, tab_pc_stock,
+     tab_errors, tab_inventory, tab_db_viewer) = st.tabs(tabs_list)
 
     with tab_graphs:
         col1, col2 = st.columns([2, 1])
@@ -218,6 +218,30 @@ def main():
         finally:
             conn.close()
 
+    with tab_pc_stock:
+        st.header("PC関連 在庫分析")
+        st.info("棚卸報告区分が「3_PC」の工場在庫について、滞留状況を分析します。")
+
+        conn = get_db_connection()
+        try:
+            pc_stock_analyzer = PcStockAnalysis(conn)
+            pc_stock_summary_df = pc_stock_analyzer.get_pc_stock_summary()
+
+            if not pc_stock_summary_df.empty:
+                st.subheader("滞留年数・区分別 サマリー")
+                st.dataframe(pc_stock_summary_df.style.format({'金額': "{:,.0f}"}), use_container_width=True, hide_index=True)
+
+                st.download_button(
+                    label="このサマリーをCSVでダウンロード",
+                    data=pc_stock_summary_df.to_csv(index=False, encoding='utf-8-sig'),
+                    file_name="pc_stock_summary.csv",
+                    mime='text/csv',
+                )
+            else:
+                st.warning("表示するPC在庫データがありません。`--sync-wip`コマンドでデータを同期してください。")
+        finally:
+            conn.close()
+
     with tab_errors:
         st.header("データ整合性チェックレポート")
         conn = get_db_connection()
@@ -248,28 +272,61 @@ def main():
 
     with tab_inventory:
         st.header("滞留在庫分析レポート")
-        st.info("指定した日数以上、生産実績のない（動きのない）品目を表示します。")
+        st.info("指定した日数以上、生産実績のない（動きのない）品目を表示します。この分析は「生産実績」データに基づきます。")
 
-        # 滞留日数の閾値をユーザーに設定させる
-        threshold_days = st.number_input(
-            "滞留日数の閾値を入力してください",
-            min_value=1,
-            max_value=365,
-            value=30,  # デフォルト値
-            step=10,
-            help="この日数を超えて生産実績がない品目を「滞留」とみなします。"
-        )
+        # 分析の前提となるデータが存在するかチェック
+        if df.empty:
+            st.warning("生産実績データがありません。")
+        else:
+            # 滞留日数の閾値をユーザーに設定させる
+            threshold_days = st.number_input(
+                "滞留日数の閾値を入力してください",
+                min_value=1,
+                max_value=365,
+                value=30,  # デフォルト値
+                step=10,
+                help="この日数を超えて生産実績がない品目を「滞留」とみなします。"
+            )
+
+            conn = get_db_connection()
+            try:
+                inventory_analyzer = InventoryAnalysis(conn)
+                stagnant_items_df = inventory_analyzer.get_stagnant_items(threshold_days)
+
+                if not stagnant_items_df.empty:
+                    st.subheader(f"{threshold_days}日以上動きのない品目リスト")
+                    st.dataframe(stagnant_items_df, use_container_width=True, hide_index=True)
+                else:
+                    st.info(f"現在、{threshold_days}日以上動きのない品目はありませんでした。")
+            finally:
+                conn.close()
+
+    with tab_db_viewer:
+        st.header("データベースビューア")
+        st.info("データベース内のテーブルを選択して、最初の200件のデータを表示します。")
 
         conn = get_db_connection()
         try:
-            inventory_analyzer = InventoryAnalysis(conn)
-            stagnant_items_df = inventory_analyzer.get_stagnant_items(threshold_days)
+            # DBに存在するテーブルのリストを取得
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [row[0] for row in cursor.fetchall()]
 
-            if not stagnant_items_df.empty:
-                st.subheader(f"{threshold_days}日以上動きのない品目リスト")
-                st.dataframe(stagnant_items_df, use_container_width=True, hide_index=True)
+            # 除外したいシステムテーブルなどをフィルタリング
+            tables_to_show = [t for t in tables if not t.startswith('sqlite_') and t != 'schema_version']
+
+            if not tables_to_show:
+                st.warning("表示できるテーブルがありません。")
             else:
-                st.success(f"{threshold_days}日以上動きのない品目はありませんでした。")
+                selected_table = st.selectbox("テーブルを選択してください", options=tables_to_show)
+
+                if selected_table:
+                    st.subheader(f"`{selected_table}` テーブルの内容")
+                    try:
+                        table_df = pd.read_sql_query(f"SELECT * FROM {selected_table} LIMIT 200", conn)
+                        st.dataframe(table_df, use_container_width=True, hide_index=True)
+                    except Exception as e:
+                        st.error(f"テーブルデータの読み込み中にエラーが発生しました: {e}")
         finally:
             conn.close()
 

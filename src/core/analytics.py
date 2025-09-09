@@ -265,3 +265,76 @@ class WipAnalysis:
         except Exception as e:
             logger.error(f"仕掛進捗サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
             return pd.DataFrame()
+
+class PcStockAnalysis:
+    """
+    PC関連の在庫分析を行うクラス。
+    """
+    def __init__(self, db_conn: sqlite3.Connection):
+        self.conn = db_conn
+
+    def get_pc_stock_summary(self) -> pd.DataFrame:
+        """
+        PC関連の在庫を集計し、滞留年数と区分ごとのサマリーを返す。
+        """
+        logger.info("PC在庫のサマリー分析を開始します。")
+        try:
+            query = """
+            SELECT
+                sl.responsible_dept,
+                sl.inventory_report_category,
+                sl.storage_location,
+                sl.storage_location_name,
+                zs.item_code,
+                zs.item_text,
+                zs.available_stock AS quantity,
+                zs.available_value AS amount,
+                zs.stagnant_days
+            FROM
+                zs65_records zs
+            LEFT JOIN
+                storage_locations sl ON zs.storage_location = sl.storage_location
+            WHERE
+                sl.inventory_report_category = '3_PC'
+                AND zs.plant = 'P100'
+                AND sl.factory_stock_category = 'Yes';
+            """
+            df = pd.read_sql_query(query, self.conn)
+
+            if df.empty:
+                logger.warning("分析対象のPC在庫データがありません。")
+                return pd.DataFrame()
+
+            # 滞留区分と滞留年数の計算
+            df['stagnant_days'] = pd.to_numeric(df['stagnant_days'], errors='coerce').fillna(0)
+
+            def assign_category(days):
+                if days > 730:
+                    return 'a. 2年以上'
+                if days > 365:
+                    return 'b. 1年以上'
+                return 'c. 1年未満'
+
+            df['category'] = df['stagnant_days'].apply(assign_category)
+            df['stagnant_years'] = (df['stagnant_days'] / 365).astype(int)
+
+            # 集計
+            summary_df = df.groupby(['category', 'stagnant_years']).agg(
+                total_amount=('amount', 'sum'),
+                item_count=('item_code', 'count')
+            ).reset_index()
+
+            # 列名をリネーム
+            summary_df.rename(columns={
+                'category': '区分',
+                'stagnant_years': '滞留年数',
+                'total_amount': '金額',
+                'item_count': '品目数'
+            }, inplace=True)
+
+            logger.info("PC在庫のサマリー分析が完了しました。")
+            return summary_df.sort_values(by=['区分', '滞留年数'])
+
+        except Exception as e:
+            logger.error(f"PC在庫サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
+            return pd.DataFrame()
