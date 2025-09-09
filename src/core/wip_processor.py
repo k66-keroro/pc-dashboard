@@ -15,14 +15,14 @@ class WipDataProcessor:
     def process_wip_details(self, file_path: Path):
         logger.info(f"仕掛明細ファイルの処理を開始します: {file_path}")
         try:
-            if not file_path.exists():
+            if not file_path or not file_path.exists():
                 logger.error(f"仕掛明細ファイルが見つかりません: {file_path}")
                 return
 
             # 本番はxlsx、テストはcsvのため拡張子で分岐
             if file_path.suffix.lower() == '.xlsx':
                 df = pd.read_excel(file_path, skiprows=3, header=0, engine='openpyxl')
-            else:
+            else: # テスト用のCSVファイル
                 df = pd.read_csv(file_path, sep='\\t', engine='python', skiprows=3, header=0, encoding='cp932')
 
             column_mapping = {
@@ -34,6 +34,10 @@ class WipDataProcessor:
                 '材料': 'material_cost', '経費': 'expense_cost'
             }
             df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns}, inplace=True)
+
+            if 'order_number' not in df.columns:
+                 raise ValueError("仕掛明細ファイルに 'ﾈｯﾄﾜｰｸ/指図番号' 列が見つかりません。")
+
             df['wip_key'] = df['order_number']
 
             numeric_cols = ['amount_jpy', 'material_cost', 'expense_cost']
@@ -71,9 +75,15 @@ class WipDataProcessor:
                 'MRP管理者名': 'mrp_controller_name', '品目コード': 'item_code', '品目テキスト': 'item_text',
                 '台数': 'quantity', 'ＷＢＳ要素': 'wbs_element', 'DLV日付': 'completion_date', 'TECO日付': 'teco_date'
             }
-            df = df.rename(columns=column_mapping)[list(column_mapping.values())]
-            df['completion_date'] = pd.to_datetime(df['completion_date'], errors='coerce')
-            df['teco_date'] = pd.to_datetime(df['teco_date'], errors='coerce')
+            # 存在する列のみを選択してリネーム
+            cols_to_use = [col for col in column_mapping.keys() if col in df.columns]
+            df = df[cols_to_use].rename(columns=column_mapping)
+
+            if 'completion_date' in df.columns:
+                df['completion_date'] = pd.to_datetime(df['completion_date'], errors='coerce')
+            if 'teco_date' in df.columns:
+                df['teco_date'] = pd.to_datetime(df['teco_date'], errors='coerce')
+
             df.to_sql('zp02_records', self.conn, if_exists='replace', index=False)
             logger.info(f"{len(df)}件のZP02データをDBにロードしました。")
         except Exception as e:
@@ -103,7 +113,8 @@ class WipDataProcessor:
                 '品目コード': 'item_code', 'プラント': 'plant', '品目テキスト': 'item_text', '保管場所': 'storage_location',
                 '利用可能評価在庫': 'available_stock', '利用可能値': 'available_value', '滞留日数': 'stagnant_days'
             }
-            df = df[list(column_mapping.keys())].rename(columns=column_mapping)
+            # 存在する列のみリネーム
+            df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns}, inplace=True)
             df.to_sql('zs65_records', self.conn, if_exists='replace', index=False)
             logger.info(f"{len(df)}件のZS65データをDBにロードしました。")
         except Exception as e:
