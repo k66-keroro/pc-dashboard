@@ -18,12 +18,12 @@ DB_PATH = DB_DIR / DB_NAME
 # Production paths (network drives)
 PROD_DATA_PATH = Path(r"\\SAPIF01\host\MES\KANSEI_JISSEKI.txt")
 PROD_MASTER_PATH = Path(r"\\SAPIF01\host\JOHODBDL\TEIKEI\MASTER\HINMOKU\MARA_DL.csv")
-PROD_ZP02_PATH = Path(r"FSSHA01\common\HOST\ZP02.txt")
-PROD_ZP58_PATH = Path(r"FSSHA01\common\HOST\ZP58.txt")
-PROD_ZS65_PATH = Path(r"FSSHA01\common\HOST\ZS65.txt")
+PROD_ZP02_PATH = Path(r"\\FSSHA01\common\HOST\ZP02.txt")
+PROD_ZP58_PATH = Path(r"\\FSSHA01\common\HOST\ZP58.txt")
+PROD_ZS65_PATH = Path(r"\\FSSHA01\common\HOST\ZS65.txt")
 PROD_WIP_DIR = Path(r"\\fssha01\全社共有\経営企画部　経理課\情ｼｽ在庫ﾃﾞｰﾀ\仕掛品")
 # 保管場所一覧は固定ファイル名を想定
-PROD_STORAGE_LOCATIONS_PATH = Path(r"FSSHA01\common\HOST\storage_locations.csv")
+PROD_STORAGE_LOCATIONS_PATH = Path(r"\\FSSHA01\common\HOST\storage_locations.csv")
 
 # Development paths (local sample files)
 DEV_DATA_PATH = SAMPLE_DATA_DIR / "KANSEI_JISSEKI.txt"
