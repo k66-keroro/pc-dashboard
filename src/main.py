@@ -19,6 +19,38 @@ import re
 logger = logging.getLogger(__name__)
 
 import datetime
+import re
+
+def find_latest_wip_file(directory: Path) -> Path:
+    """
+    指定されたディレクトリ内で、命名規則に一致する最新の仕掛明細ファイルを見つける。
+    ファイル名の例: 202508末_仕掛明細表_WBS集約(仕掛年齢付与)_0901.xlsx
+    """
+    logger.info(f"最新の仕掛明細ファイルを検索します: {directory}")
+    pattern = re.compile(r"(\d{8})_仕掛明細表_WBS集約.*\.xlsx")
+    latest_file = None
+    latest_timestamp = ""
+
+    if not directory.is_dir():
+        logger.warning(f"仕掛明細のディレクトリが見つかりません: {directory}")
+        return None
+
+    for f in directory.iterdir():
+        if f.is_file():
+            match = pattern.match(f.name)
+            if match:
+                timestamp_str = match.group(1)
+                logger.debug(f"ファイル {f.name} からタイムスタンプ {timestamp_str} を抽出しました。")
+                if latest_timestamp is None or timestamp_str > latest_timestamp:
+                    latest_timestamp = timestamp_str
+                    latest_file = f
+
+    if latest_file:
+        logger.info(f"最新の仕掛明細ファイルとして {latest_file.name} を選択しました。")
+    else:
+        logger.warning(f"ディレクトリ {directory} 内に、パターンに一致する仕掛明細ファイルが見つかりませんでした。")
+
+    return latest_file
 
 def run_pipeline(conn: sqlite3.Connection, data_path: Path):
     """
@@ -86,7 +118,7 @@ def main():
     parser = argparse.ArgumentParser(description="PC製造ダッシュボードのデータ処理サービス")
     parser.add_argument('--sync-master', action='store_true', help='品目マスターCSVをデータベースに同期して終了します。')
     parser.add_argument('--sync-wip', action='store_true', help='仕掛関連ファイルをデータベースに同期して終了します。')
-    parser.add_argument('--wip-file', type=Path, help='処理対象の仕掛明細ファイルへのフルパス（--sync-wipと併用）。')
+    parser.add_argument('--wip-file', type=Path, help='処理対象の仕掛明細ファイルへのフルパス（オプション）。本番モードで自動検出を上書きする場合に使用。')
     parser.add_argument('--prod', action='store_true', help='本番モードで実行し、ネットワークパス上のファイルを参照します。')
     args = parser.parse_args()
 
@@ -99,6 +131,8 @@ def main():
         zp02_path = settings.PROD_ZP02_PATH
         storage_locations_path = settings.PROD_STORAGE_LOCATIONS_PATH
         zs65_path = settings.PROD_ZS65_PATH
+        # --wip-fileが指定されていなければ、動的に検索
+        wip_details_path = args.wip_file if args.wip_file else find_latest_wip_file(settings.PROD_WIP_DIR)
     else:
         logger.info("開発モードで実行します。")
         data_path = settings.DEV_DATA_PATH
@@ -107,6 +141,8 @@ def main():
         zp02_path = settings.DEV_ZP02_PATH
         storage_locations_path = settings.DEV_STORAGE_LOCATIONS_PATH
         zs65_path = settings.DEV_ZS65_PATH
+        wip_details_path = args.wip_file if args.wip_file else settings.DEV_WIP_DETAILS_PATH
+
 
     logger.info(f"データソース: {data_path}")
     logger.info(f"マスターソース: {master_path}")
@@ -126,10 +162,9 @@ def main():
             sys.exit(0)
 
         elif args.sync_wip:
-            # --sync-wip を使用する際は --wip-file も必須とする
-            wip_details_path = args.wip_file if args.wip_file else settings.DEV_WIP_DETAILS_PATH
-            if args.prod and not args.wip_file:
-                logger.error("--prodモードで--sync-wipを実行する場合、--wip-file引数で仕掛明細ファイルのフルパスを指定する必要があります。")
+            # 動的検索が失敗し、かつ手動でのパス指定もない場合はエラー終了
+            if not wip_details_path:
+                logger.error("処理対象の仕掛明細ファイルが見つかりませんでした。--wip-file引数で直接パスを指定してください。")
                 sys.exit(1)
 
             wip_processor = WipDataProcessor(conn)

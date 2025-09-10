@@ -63,10 +63,10 @@ def sample_data_files(tmp_path):
     sl_file.write_text(sl_content, encoding="cp932")
 
     # 5. ZS65データ
-    zs65_header = "品目コード\t品目テキスト\t保管場所\tplant\t滞留日数\t利用可能値\n"
+    zs65_header = "品目コード\t品目テキスト\t保管場所\tplant\t滞留日数\t利用可能値\t利用可能評価在庫\n"
     zs65_content = (
         zs65_header +
-        "ITEM001\tTest Item ZS65\t1120\tP100\t500\t10000\n"
+        "ITEM001\tTest Item ZS65\t1120\tP100\t500\t10000\t10\n"
     )
     zs65_file = data_dir / "ZS65.TXT"
     zs65_file.write_text(zs65_content, encoding="cp932")
