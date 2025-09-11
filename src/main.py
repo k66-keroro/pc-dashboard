@@ -5,6 +5,8 @@ import logging
 import time
 from pathlib import Path
 import sqlite3
+import re
+import datetime
 
 from src.models.database import get_db_connection
 from src.models.migration_manager import apply_migrations
@@ -14,13 +16,8 @@ from src.core.analytics import ProductionAnalytics, ErrorDetection
 from src.core.reporter import ReportGenerator
 from src.config import settings
 from src.utils.logging_config import setup_logging
-import re
 
 logger = logging.getLogger(__name__)
-
-import datetime
-import re
-
 
 def find_latest_wip_file(directory: Path) -> Path:
     """
@@ -32,19 +29,22 @@ def find_latest_wip_file(directory: Path) -> Path:
     latest_file = None
     latest_timestamp = ""
 
-    if not directory.is_dir():
-        logger.warning(f"仕掛明細のディレクトリが見つかりません: {directory}")
-        return None
+    try:
+        if not directory.is_dir():
+            logger.warning(f"仕掛明細のディレクトリが見つかりません: {directory}")
+            return None
 
-    for f in directory.iterdir():
-        if f.is_file():
-            match = pattern.match(f.name)
-            if match:
-                timestamp_str = match.group(1)
-                logger.debug(f"ファイル {f.name} からタイムスタンプ {timestamp_str} を抽出しました。")
-                if not latest_timestamp or timestamp_str > latest_timestamp:
-                    latest_timestamp = timestamp_str
-                    latest_file = f
+        for f in directory.iterdir():
+            if f.is_file():
+                match = pattern.match(f.name)
+                if match:
+                    timestamp_str = match.group(1)
+                    if not latest_timestamp or timestamp_str > latest_timestamp:
+                        latest_timestamp = timestamp_str
+                        latest_file = f
+    except Exception as e:
+        logger.error(f"ディレクトリ検索中にエラーが発生しました: {directory}, エラー: {e}", exc_info=True)
+        return None
 
     if latest_file:
         logger.info(f"最新の仕掛明細ファイルとして {latest_file.name} を選択しました。")
@@ -53,24 +53,19 @@ def find_latest_wip_file(directory: Path) -> Path:
 
     return latest_file
 
-
 def run_pipeline(conn: sqlite3.Connection, data_path: Path):
     """
     一回のデータ処理パイプラインを実行する。
     """
     logger.info("パイプライン処理を開始します。")
     try:
-        # 【診断用】ファイルの最終更新日時をログに出力
-        try:
-            if data_path.exists():
-                mod_time_ts = os.path.getmtime(data_path)
-                mod_time = datetime.datetime.fromtimestamp(mod_time_ts)
-                logger.info(f"読み込み対象ファイルの最終更新日時: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            else:
-                logger.warning(f"データファイルが見つかりません: {data_path}")
-                return # このサイクルの処理をスキップ
-        except Exception as e:
-            logger.error(f"ファイルの最終更新日時取得中にエラー: {e}")
+        if data_path and data_path.exists():
+            mod_time_ts = os.path.getmtime(data_path)
+            mod_time = datetime.datetime.fromtimestamp(mod_time_ts)
+            logger.info(f"読み込み対象ファイルの最終更新日時: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            logger.warning(f"データファイルが見つかりません: {data_path}")
+            return
 
         processor = DataProcessor(conn)
         summary = processor.process_file_and_load_to_db(data_path)
@@ -83,7 +78,6 @@ def run_pipeline(conn: sqlite3.Connection, data_path: Path):
         logger.info("========================================")
 
         if summary.get('successful_inserts', 0) > 0:
-            # 分析とレポート生成は、処理されたデータがある場合のみ実行
             logger.info("========== 生産実績サマリー ==========")
             analytics = ProductionAnalytics(conn)
             analytics_summary = analytics.get_summary()
@@ -112,10 +106,6 @@ def run_pipeline(conn: sqlite3.Connection, data_path: Path):
 
 
 def main():
-    """
-    アプリケーションのエントリーポイント。
-    引数に応じて、マスター同期または常駐サービスとしてパイプラインを実行する。
-    """
     setup_logging()
     parser = argparse.ArgumentParser(description="PC製造ダッシュボードのデータ処理サービス")
     parser.add_argument('--sync-master', action='store_true', help='品目マスターCSVをデータベースに同期して終了します。')
@@ -124,7 +114,6 @@ def main():
     parser.add_argument('--prod', action='store_true', help='本番モードで実行し、ネットワークパス上のファイルを参照します。')
     args = parser.parse_args()
 
-    # モードに応じてパスを設定
     if args.prod:
         logger.info("本番モードで実行します。")
         data_path = settings.PROD_DATA_PATH
@@ -133,7 +122,6 @@ def main():
         zp02_path = settings.PROD_ZP02_PATH
         storage_locations_path = settings.PROD_STORAGE_LOCATIONS_PATH
         zs65_path = settings.PROD_ZS65_PATH
-        # --wip-fileが指定されていなければ、動的に検索
         wip_details_path = args.wip_file if args.wip_file else find_latest_wip_file(settings.PROD_WIP_DIR)
     else:
         logger.info("開発モードで実行します。")
@@ -145,7 +133,6 @@ def main():
         zs65_path = settings.DEV_ZS65_PATH
         wip_details_path = args.wip_file if args.wip_file else settings.DEV_WIP_DETAILS_PATH
 
-
     logger.info(f"データソース: {data_path}")
     logger.info(f"マスターソース: {master_path}")
 
@@ -156,15 +143,13 @@ def main():
         apply_migrations(conn)
         logger.info("データベースの準備が完了しました。")
 
-        data_processor = DataProcessor(conn)
-
         if args.sync_master:
+            data_processor = DataProcessor(conn)
             data_processor.sync_master_from_csv(master_path)
             logger.info("品目マスターの同期が完了しました。プログラムを終了します。")
             sys.exit(0)
 
         elif args.sync_wip:
-            # 動的検索が失敗し、かつ手動でのパス指定もない場合はエラー終了
             if not wip_details_path:
                 logger.error("処理対象の仕掛明細ファイルが見つかりませんでした。--wip-file引数で直接パスを指定してください。")
                 sys.exit(1)

@@ -22,7 +22,6 @@ PROD_ZP02_PATH = Path(r"\\SAPIF01\host\ZP02\ZP02.TXT")
 PROD_ZP58_PATH = Path(r"\\SAPIF01\host\ZP58\ZP58.txt")
 PROD_ZS65_PATH = Path(r"\\SAPIF01\host\ZS65\ZS65.TXT")
 PROD_WIP_DIR = Path(r"\\SAPIF01\全社共有\経営企画部　経理課\情ｼｽ在庫ﾃﾞｰﾀ\仕掛品")
-# 保管場所一覧は固定ファイル名を想定。ユーザーからの情報に基づき、ファイル名は'保管場所一覧.csv'と仮定
 PROD_STORAGE_LOCATIONS_PATH = Path(r"\\SAPIF01\host\storage_locations\保管場所一覧.csv")
 
 # Development paths (local sample files)
