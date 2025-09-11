@@ -205,7 +205,13 @@ def main():
 
             if not wip_comparison_df.empty:
                 st.subheader("仕掛年齢別 サマリー")
-                st.dataframe(wip_comparison_df.style.format("{:,.0f}"), use_container_width=True, hide_index=True)
+                # 数値列にのみフォーマットを適用
+                st.dataframe(wip_comparison_df.style.format({
+                    '当初金額': '{:,.0f}',
+                    '当初件数': '{:,.0f}',
+                    '残高金額': '{:,.0f}',
+                    '残高件数': '{:,.0f}'
+                }), use_container_width=True, hide_index=True)
 
                 st.download_button(
                     label="このサマリーをCSVでダウンロード",

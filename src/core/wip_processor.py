@@ -60,6 +60,8 @@ class WipDataProcessor:
             df.rename(columns={'指図／ネットワーク': 'order_number'}, inplace=True)
             df.dropna(subset=['order_number'], inplace=True)
             df['order_number'] = df['order_number'].astype(str).str.strip()
+            # フィルタリング: 指図番号が'5'で始まるもののみ
+            df = df[df['order_number'].str.startswith('5', na=False)]
             df.drop_duplicates(inplace=True)
             df.to_sql('zp58_records', self.conn, if_exists='replace', index=False)
             logger.info(f"{len(df)}件のZP58データをDBにロードしました。")
@@ -70,6 +72,11 @@ class WipDataProcessor:
         logger.info(f"ZP02ファイルの処理を開始します: {file_path}")
         try:
             df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932')
+
+            # フィルタリング: MRP管理者が'PC'で始まるもののみ
+            if 'MRP管理者' in df.columns:
+                df = df[df['MRP管理者'].str.startswith('PC', na=False)]
+
             column_mapping = {
                 '指図番号': 'order_number', '指図ステータス': 'order_status', 'MRP管理者': 'mrp_controller',
                 'MRP管理者名': 'mrp_controller_name', '品目コード': 'item_code', '品目テキスト': 'item_text',
@@ -92,7 +99,7 @@ class WipDataProcessor:
     def process_storage_locations(self, file_path: Path):
         logger.info(f"保管場所一覧ファイルの処理を開始します: {file_path}")
         try:
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='utf-8')
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932')
             column_mapping = {
                 'ﾌﾟﾗﾝﾄ': 'plant', '責任部署': 'responsible_dept', '棚卸報告区分': 'inventory_report_category',
                 '保管場所': 'storage_location', '保管場所名': 'storage_location_name', '工場在庫区分': 'factory_stock_category',
@@ -109,6 +116,11 @@ class WipDataProcessor:
         logger.info(f"ZS65ファイルの処理を開始します: {file_path}")
         try:
             df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932')
+
+            # フィルタリング: プラントが'P100'のもののみ
+            if 'プラント' in df.columns:
+                df = df[df['プラント'] == 'P100']
+
             column_mapping = {
                 '品目コード': 'item_code', 'プラント': 'plant', '品目テキスト': 'item_text', '保管場所': 'storage_location',
                 '利用可能評価在庫': 'available_stock', '利用可能値': 'available_value', '滞留日数': 'stagnant_days'
