@@ -22,7 +22,8 @@ PROD_ZP02_PATH = Path(r"\\SAPIF01\host\ZP02\ZP02.TXT")
 PROD_ZP58_PATH = Path(r"\\SAPIF01\host\ZP58\ZP58.txt")
 PROD_ZS65_PATH = Path(r"\\SAPIF01\host\ZS65\ZS65.TXT")
 PROD_WIP_DIR = Path(r"\\SAPIF01\全社共有\経営企画部　経理課\情ｼｽ在庫ﾃﾞｰﾀ\仕掛品")
-PROD_STORAGE_LOCATIONS_PATH = Path(r"\\SAPIF01\host\storage_locations\保管場所一覧.csv")
+# 保管場所一覧はマスターデータとしてリポジトリ内のサンプルファイルを常に参照する
+PROD_STORAGE_LOCATIONS_PATH = SAMPLE_DATA_DIR / "storage_locations.csv"
 
 # Development paths (local sample files)
 DEV_DATA_PATH = SAMPLE_DATA_DIR / "KANSEI_JISSEKI.txt"

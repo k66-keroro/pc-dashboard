@@ -95,3 +95,5 @@ python -m src.main --sync-wip --prod
 ```bash
 python -m src.main --sync-wip --prod --wip-file "仕掛明細ファイルのフルパス"
 ```
+
+**注意:** 分析に使用される「保管場所一覧」(`storage_locations.csv`)は、リポジトリ内の`data/sample/`に格納されているマスターファイルです。内容を更新する場合は、このファイルを直接編集してください。

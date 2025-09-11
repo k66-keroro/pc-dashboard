@@ -25,7 +25,7 @@ def find_latest_wip_file(directory: Path) -> Path:
     ファイル名の例: 202508末_仕掛明細表_WBS集約(仕掛年齢付与)_0901.xlsx
     """
     logger.info(f"最新の仕掛明細ファイルを検索します: {directory}")
-    pattern = re.compile(r"(\d{8})_仕掛明細表_WBS集約.*\.xlsx")
+    pattern = re.compile(r"(\d{6}末)_仕掛明細表_WBS集約.*\.xlsx")
     latest_file = None
     latest_timestamp = ""
 
