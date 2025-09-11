@@ -99,7 +99,7 @@ class WipDataProcessor:
     def process_storage_locations(self, file_path: Path):
         logger.info(f"保管場所一覧ファイルの処理を開始します: {file_path}")
         try:
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932')
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='utf-8')
             column_mapping = {
                 'ﾌﾟﾗﾝﾄ': 'plant', '責任部署': 'responsible_dept', '棚卸報告区分': 'inventory_report_category',
                 '保管場所': 'storage_location', '保管場所名': 'storage_location_name', '工場在庫区分': 'factory_stock_category',
