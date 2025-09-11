@@ -21,7 +21,7 @@ PROD_MASTER_PATH = Path(r"\\SAPIF01\host\JOHODBDL\TEIKEI\MASTER\HINMOKU\MARA_DL.
 PROD_ZP02_PATH = Path(r"\\SAPIF01\host\ZP02\ZP02.TXT")
 PROD_ZP58_PATH = Path(r"\\SAPIF01\host\ZP58\ZP58.txt")
 PROD_ZS65_PATH = Path(r"\\SAPIF01\host\ZS65\ZS65.TXT")
-PROD_WIP_DIR = Path(r"\\SAPIF01\全社共有\経営企画部　経理課\情ｼｽ在庫ﾃﾞｰﾀ\仕掛品")
+PROD_WIP_DIR = Path(r"\\fssha01\全社共有\経営企画部　経理課\情ｼｽ在庫ﾃﾞｰﾀ\仕掛品")
 PROD_STORAGE_LOCATIONS_PATH = SAMPLE_DATA_DIR / "storage_locations.csv"
 
 # Development paths (local sample files)

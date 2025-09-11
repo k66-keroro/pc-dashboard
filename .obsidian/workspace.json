@@ -1,0 +1,186 @@
+{
+  "main": {
+    "id": "2d924ac139f438d4",
+    "type": "split",
+    "children": [
+      {
+        "id": "fb62a281a986b929",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e1bcfb840ca780c9",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "MANUAL.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "MANUAL"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "c38bb312b5703039",
+    "type": "split",
+    "children": [
+      {
+        "id": "6e26988d394624f9",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a90f3a87dcbd9413",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "ファイルエクスプローラ"
+            }
+          },
+          {
+            "id": "cfa1332bdd94273c",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "検索"
+            }
+          },
+          {
+            "id": "d0f6582f32a36202",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "ブックマーク"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "23ec588d4498b47a",
+    "type": "split",
+    "children": [
+      {
+        "id": "f08e549b0653781d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6d534a450b6befeb",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "MANUAL.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "MANUALへのバックリンク"
+            }
+          },
+          {
+            "id": "8225599196cc879b",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "MANUAL.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "MANUALからのアウトゴーイングリンク"
+            }
+          },
+          {
+            "id": "262b49033bc86701",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "タグ"
+            }
+          },
+          {
+            "id": "523a1e5edea3e561",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "MANUAL.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "MANUALのアウトライン"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:クイックスイッチャーを開く": false,
+      "graph:グラフビューを開く": false,
+      "canvas:新規キャンバスを作成": false,
+      "daily-notes:今日のデイリーノートを開く": false,
+      "templates:テンプレートを挿入": false,
+      "command-palette:コマンドパレットを開く": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "e1bcfb840ca780c9",
+  "lastOpenFiles": [
+    "data/sqlite/production.db-journal",
+    "migrations/__pycache__/005_add_pc_stock_tables.cpython-311.pyc",
+    "migrations/__pycache__/004_add_wip_tables.cpython-311.pyc",
+    "migrations/__pycache__/003_add_unique_constraint_to_records.cpython-311.pyc",
+    "migrations/__pycache__/003_add_unique_constraint_to_records.cpython-311.pyc.2363868950608",
+    "migrations/__pycache__/002_add_item_master_table.cpython-311.pyc",
+    "migrations/__pycache__/001_create_production_records_table.cpython-311.pyc",
+    "migrations/__pycache__",
+    "data/sqlite/production.db",
+    "logs/app.log",
+    "src/utils/__pycache__/__init__.cpython-311.pyc"
+  ]
+}
