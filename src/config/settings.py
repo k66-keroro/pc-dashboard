@@ -18,10 +18,20 @@ DB_PATH = DB_DIR / DB_NAME
 # Production paths (network drives)
 PROD_DATA_PATH = Path(r"\\SAPIF01\host\MES\KANSEI_JISSEKI.txt")
 PROD_MASTER_PATH = Path(r"\\SAPIF01\host\JOHODBDL\TEIKEI\MASTER\HINMOKU\MARA_DL.csv")
+PROD_ZP02_PATH = Path(r"\\SAPIF01\host\ZP02\ZP02.TXT")
+PROD_ZP58_PATH = Path(r"\\SAPIF01\host\ZP58\ZP58.txt")
+PROD_ZS65_PATH = Path(r"\\SAPIF01\host\ZS65\ZS65.TXT")
+PROD_WIP_DIR = Path(r"\\SAPIF01\全社共有\経営企画部　経理課\情ｼｽ在庫ﾃﾞｰﾀ\仕掛品")
+PROD_STORAGE_LOCATIONS_PATH = SAMPLE_DATA_DIR / "storage_locations.csv"
 
 # Development paths (local sample files)
 DEV_DATA_PATH = SAMPLE_DATA_DIR / "KANSEI_JISSEKI.txt"
 DEV_MASTER_PATH = SAMPLE_DATA_DIR / "MARA_DL.csv"
+DEV_WIP_DETAILS_PATH = SAMPLE_DATA_DIR / "wip_details.csv"
+DEV_ZP58_PATH = SAMPLE_DATA_DIR / "ZP58.txt"
+DEV_ZP02_PATH = SAMPLE_DATA_DIR / "ZP02.TXT"
+DEV_STORAGE_LOCATIONS_PATH = SAMPLE_DATA_DIR / "storage_locations.csv"
+DEV_ZS65_PATH = SAMPLE_DATA_DIR / "ZS65.TXT"
 
 
 # 4. --- Logging ---

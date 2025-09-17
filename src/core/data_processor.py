@@ -52,6 +52,11 @@ class DataProcessor:
 
             master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
 
+            # フィルタリング: プラントが'P100'のもののみ
+            if 'プラント' in master_df.columns:
+                master_df = master_df[master_df['プラント'] == 'P100']
+                logger.info(f"P100でフィルタリング後、{len(master_df)}件のレコード。")
+
             if 'item_code' in master_df.columns:
                 master_df['item_code'] = master_df['item_code'].str.strip()
 

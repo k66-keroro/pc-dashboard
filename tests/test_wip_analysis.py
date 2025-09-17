@@ -1,0 +1,107 @@
+import pytest
+import sqlite3
+import pandas as pd
+from pathlib import Path
+
+from src.core.wip_processor import WipDataProcessor
+from src.core.analytics import WipAnalysis, PcStockAnalysis
+from src.models.migration_manager import apply_migrations
+
+@pytest.fixture
+def db_conn():
+    """
+    テスト用のインメモリSQLiteデータベース接続を提供するフィクスチャ。
+    """
+    conn = sqlite3.connect(":memory:")
+    apply_migrations(conn)
+    yield conn
+    conn.close()
+
+@pytest.fixture
+def sample_data_files(tmp_path):
+    """
+    テスト用のダミーデータファイルを作成するフィクスチャ。
+    """
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    # 1. 仕掛明細データ (フィルタ条件を満たすように修正)
+    wip_header = "キー\tﾌﾟﾗﾝﾄ\tMRP管理者\t工場\tライン\tﾈｯﾄﾜｰｸ/指図番号\tテキスト\t金額（国内通貨）\t品目\t初期数量\t仕掛数\t完成数量\t初期実績日付\t仕掛年齢\tCMPL\t材料\t経費\n"
+    wip_content = (
+        "header\n" * 3 +
+        wip_header +
+        "NW\tkey1\tPC1\tF1\tL1\t50001\tItem 1\t1,000\tITEM001\t10\t5\t5\t2025年8月\t1ケ月\t\t500\t500\n"
+        "NW\tkey2\tPC2\tF2\tL2\t50002\tItem 2\t2,000\tITEM002\t20\t20\t0\t2025年7月\t2ケ月\t\t1000\t1000\n"
+        "NW\tkey3\tPC1\tF1\tL1\t50003\tItem 3\t500\tITEM003\t5\t0\t5\t2025年6月\t3ケ月\t\t250\t250\n"
+    )
+    wip_file = data_dir / "wip_details.csv"
+    wip_file.write_text(wip_content, encoding="cp932")
+
+    # 2. ZP02データ (フィルタ条件を満たすように修正)
+    zp02_header = "MRP管理者\tMRP管理者名\t指図番号\t指図ステータス\t品目コード\t品目テキスト\t台数\tＷＢＳ要素\tDLV日付\tTECO日付\n"
+    zp02_content = (
+        zp02_header +
+        "PC1\tPC1_Name\t50001\tREL\tITEM001\tItem 1\t10\tWBS001\t\t\n"
+        "PC2\tPC2_Name\t50002\tREL\tITEM002\tItem 2\t20\tWBS002\t\t\n"
+        "PC1\tPC1_Name\t50003\tTECO\tITEM003\tItem 3\t5\tWBS003\t\t2025-09-01\n"
+    )
+    zp02_file = data_dir / "ZP02.TXT"
+    zp02_file.write_text(zp02_content, encoding="cp932")
+
+    # 3. ZP58データ (フィルタ条件を満たすように修正)
+    zp58_content = "指図／ネットワーク\n50002\n"
+    zp58_file = data_dir / "ZP58.txt"
+    zp58_file.write_text(zp58_content, encoding="cp932")
+
+    # 4. 保管場所一覧データ
+    sl_header = "ﾌﾟﾗﾝﾄ\t責任部署\t棚卸報告区分\t保管場所\t保管場所名\t工場在庫区分\t営業在庫区分\t工場区分\t工場区分2\t使用不可区分\t棚番チェック用\t所要check\n"
+    sl_content = (
+        sl_header +
+        "P100\t製造2部\t3_PC\t1120\t滋賀ＰＣ倉庫（ＡＷＣ）\tYes\tNo\t滋賀工場\t滋賀工場\t\tTrue\t1_使用可\n"
+    )
+    sl_file = data_dir / "storage_locations.csv"
+    sl_file.write_text(sl_content, encoding="cp932")
+
+    # 5. ZS65データ (フィルタ条件を満たすように修正)
+    zs65_header = "品目コード\t品目テキスト\t保管場所\tplant\t滞留日数\t利用可能値\t利用可能評価在庫\n"
+    zs65_content = (
+        zs65_header +
+        "ITEM001\tTest Item ZS65\t1120\tP100\t500\t10000\t10\n"
+    )
+    zs65_file = data_dir / "ZS65.TXT"
+    zs65_file.write_text(zs65_content, encoding="cp932")
+
+    return wip_file, zp02_file, zp58_file, sl_file, zs65_file
+
+
+def test_wip_data_processor(db_conn, sample_data_files):
+    wip_file, zp02_file, zp58_file, sl_file, zs65_file = sample_data_files
+    processor = WipDataProcessor(db_conn)
+    processor.run_all(wip_file, zp58_file, zp02_file, sl_file, zs65_file)
+
+    wip_df = pd.read_sql_query("SELECT * FROM wip_details", db_conn)
+    zp02_df = pd.read_sql_query("SELECT * FROM zp02_records", db_conn)
+    sl_df = pd.read_sql_query("SELECT * FROM storage_locations", db_conn)
+    zs65_df = pd.read_sql_query("SELECT * FROM zs65_records", db_conn)
+
+    assert len(wip_df) == 3
+    assert len(zp02_df) == 3
+    assert len(sl_df) == 1
+    assert len(zs65_df) == 1
+
+def test_wip_analysis_summary(db_conn, sample_data_files):
+    wip_file, zp02_file, zp58_file, sl_file, zs65_file = sample_data_files
+    processor = WipDataProcessor(db_conn)
+    processor.run_all(wip_file, zp58_file, zp02_file, sl_file, zs65_file)
+    analyzer = WipAnalysis(db_conn)
+    summary_df = analyzer.get_wip_summary_comparison()
+    assert not summary_df.empty
+
+def test_pc_stock_analysis(db_conn, sample_data_files):
+    wip_file, zp02_file, zp58_file, sl_file, zs65_file = sample_data_files
+    processor = WipDataProcessor(db_conn)
+    processor.run_all(wip_file, zp58_file, zp02_file, sl_file, zs65_file)
+    analyzer = PcStockAnalysis(db_conn)
+    summary_df = analyzer.get_pc_stock_summary()
+    assert not summary_df.empty
+    assert summary_df.iloc[0]['金額'] == 10000

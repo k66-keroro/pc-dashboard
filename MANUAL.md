@@ -84,3 +84,16 @@ python -m streamlit run src/app.py -- --prod
 ```bash
 python -m src.main --sync-master --prod
 ```
+
+**仕掛・在庫データの同期（本番）:**
+```bash
+python -m src.main --sync-wip --prod
+```
+このコマンドは、`\\SAPIF01\全社共有\経営企画部　経理課\情ｼｽ在庫ﾃﾞｰﾀ\仕掛品` フォルダ内から、命名規則に一致する最新の仕掛明細ファイルを自動的に検索して処理します。
+
+もし、ファイルが自動で見つからない旨のエラーが表示された場合は、以下のように `--wip-file` 引数を使って、ファイルのフルパスを直接指定することも可能です。
+```bash
+python -m src.main --sync-wip --prod --wip-file "仕掛明細ファイルのフルパス"
+```
+
+**注意:** 分析に使用される「保管場所一覧」(`storage_locations.csv`)は、リポジトリ内の`data/sample/`に格納されているマスターファイルです。内容を更新する場合は、このファイルを直接編集してください。
