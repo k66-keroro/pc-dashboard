@@ -290,7 +290,8 @@ class WipAnalysis:
             LEFT JOIN
                 zp58_records z58 ON d.order_number = z58.order_number
             WHERE
-                d.mrp_controller LIKE 'P%';
+                d.mrp_controller LIKE 'P%'
+                AND (z02.order_status IS NULL OR z02.order_status NOT IN ('TECO', 'DLV'));
             """
             df = pd.read_sql_query(query, self.conn)
             logger.info(f"{len(df)}件の仕掛明細データを取得しました。")
@@ -370,4 +371,45 @@ class PcStockAnalysis:
 
         except Exception as e:
             logger.error(f"PC在庫サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    def get_pc_stock_details_report(self) -> pd.DataFrame:
+        """
+        PC関連の滞留在庫の明細レポートを生成する。
+        """
+        logger.info("PC在庫の明細レポート生成を開始します。")
+        try:
+            query = """
+            SELECT
+                sl.responsible_dept AS "責任部署",
+                sl.inventory_report_category AS "棚卸報告区分",
+                sl.storage_location AS "保管場所",
+                sl.storage_location_name AS "保管場所名",
+                zs.item_code AS "品目コード",
+                zs.item_text AS "品目テキスト",
+                zs.available_stock AS "数量",
+                zs.available_value AS "金額",
+                zs.stagnant_days AS "滞留日数",
+                CASE
+                    WHEN zs.stagnant_days > 730 THEN 'a. 2年以上'
+                    WHEN zs.stagnant_days > 365 THEN 'b. 1年以上'
+                    ELSE 'c. 1年未満'
+                END AS "区分",
+                ROUND(zs.stagnant_days / 365.0) AS "滞留年数"
+            FROM
+                zs65_records zs
+            LEFT JOIN
+                storage_locations sl ON zs.storage_location = sl.storage_location
+            WHERE
+                sl.inventory_report_category = '3_PC'
+                AND zs.plant = 'P100'
+                AND sl.factory_stock_category = 'Yes'
+            ORDER BY
+                zs.stagnant_days DESC;
+            """
+            df = pd.read_sql_query(query, self.conn)
+            logger.info(f"{len(df)}件のPC在庫明細データを取得しました。")
+            return df
+        except Exception as e:
+            logger.error(f"PC在庫明細レポートの生成中にエラーが発生しました: {e}", exc_info=True)
             return pd.DataFrame()

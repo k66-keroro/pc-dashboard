@@ -25,7 +25,9 @@ class WipDataProcessor:
             if file_path.suffix.lower() == '.xlsx':
                 df = pd.read_excel(file_path, skiprows=3, header=0, engine='openpyxl')
             else: # テスト用のCSVファイル
-                df = pd.read_csv(file_path, sep='\\t', engine='python', skiprows=0, header=0, encoding='utf-8-sig')
+                # 開発(サンプル)はヘッダー0行、本番は3行と想定
+                skip = 3 if self.mode == 'prod' else 0
+                df = pd.read_csv(file_path, sep='\\t', engine='python', skiprows=skip, header=0, encoding='utf-8-sig')
 
             column_mapping = {
                 'キー': 'wip_type', 'ﾌﾟﾗﾝﾄ': 'plant', 'MRP管理者': 'mrp_controller',
@@ -64,11 +66,6 @@ class WipDataProcessor:
             df.rename(columns={'指図／ネットワーク': 'order_number'}, inplace=True)
             df.dropna(subset=['order_number'], inplace=True)
             df['order_number'] = df['order_number'].astype(str).str.strip()
-
-            if self.mode == 'prod':
-                # フィルタリング: 指図番号が'5'で始まるもののみ
-                logger.info("本番モードのため、ZP58の指図番号フィルタ（'5'で始まる）を適用します。")
-                df = df[df['order_number'].str.startswith('5', na=False)]
 
             df.drop_duplicates(inplace=True)
             df.to_sql('zp58_records', self.conn, if_exists='replace', index=False)

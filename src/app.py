@@ -257,6 +257,20 @@ def main():
                     file_name="pc_stock_summary.csv",
                     mime='text/csv',
                 )
+
+                st.divider()
+                st.subheader("滞留在庫 明細一覧")
+                pc_stock_details_df = pc_stock_analyzer.get_pc_stock_details_report()
+                if not pc_stock_details_df.empty:
+                    st.dataframe(pc_stock_details_df.style.format({'金額': "{:,.0f}", '数量': '{:,.3f}'}), use_container_width=True, hide_index=True)
+                    st.download_button(
+                        label="この明細をCSVでダウンロード",
+                        data=pc_stock_details_df.to_csv(index=False, encoding='utf-8-sig'),
+                        file_name="pc_stock_details.csv",
+                        mime='text/csv',
+                    )
+                else:
+                    st.info("表示する明細データがありません。")
             else:
                 st.warning("表示するPC在庫データがありません。`--sync-wip`コマンドでデータを同期してください。")
         finally:
