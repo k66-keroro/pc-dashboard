@@ -266,6 +266,39 @@ class WipAnalysis:
             logger.error(f"仕掛進捗サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
             return pd.DataFrame()
 
+    def get_wip_details_report(self) -> pd.DataFrame:
+        """
+        仕掛品の明細レポートを生成する。
+        材料未出庫(zp58に存在する)かどうかのフラグを含む。
+        """
+        logger.info("仕掛明細レポートの生成を開始します。")
+        try:
+            # _get_base_wip_data クエリを拡張して、詳細レポート用の列を追加
+            query = """
+            SELECT
+                d.order_number AS "指図番号",
+                d.item_code AS "品目コード",
+                d.item_text AS "品目テキスト",
+                d.wip_age AS "仕掛年齢",
+                d.amount_jpy AS "金額",
+                z02.order_status AS "指図ステータス",
+                CASE WHEN z58.order_number IS NOT NULL THEN '材料未出庫' ELSE '' END AS "未出庫フラグ"
+            FROM
+                wip_details d
+            LEFT JOIN
+                zp02_records z02 ON d.order_number = z02.order_number
+            LEFT JOIN
+                zp58_records z58 ON d.order_number = z58.order_number
+            WHERE
+                d.mrp_controller LIKE 'P%';
+            """
+            df = pd.read_sql_query(query, self.conn)
+            logger.info(f"{len(df)}件の仕掛明細データを取得しました。")
+            return df
+        except Exception as e:
+            logger.error(f"仕掛明細レポートの生成中にエラーが発生しました: {e}", exc_info=True)
+            return pd.DataFrame()
+
 class PcStockAnalysis:
     """
     PC関連の在庫分析を行うクラス。

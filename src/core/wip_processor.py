@@ -9,8 +9,10 @@ class WipDataProcessor:
     """
     仕掛関連のデータファイルを処理し、データベースにロードするクラス。
     """
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn: sqlite3.Connection, mode: str = 'dev'):
         self.conn = conn
+        self.mode = mode
+        logger.info(f"WipDataProcessor initialized in '{self.mode}' mode.")
 
     def process_wip_details(self, file_path: Path):
         logger.info(f"仕掛明細ファイルの処理を開始します: {file_path}")
@@ -23,7 +25,7 @@ class WipDataProcessor:
             if file_path.suffix.lower() == '.xlsx':
                 df = pd.read_excel(file_path, skiprows=3, header=0, engine='openpyxl')
             else: # テスト用のCSVファイル
-                df = pd.read_csv(file_path, sep='\\t', engine='python', skiprows=3, header=0, encoding='cp932')
+                df = pd.read_csv(file_path, sep='\\t', engine='python', skiprows=0, header=0, encoding='utf-8-sig')
 
             column_mapping = {
                 'キー': 'wip_type', 'ﾌﾟﾗﾝﾄ': 'plant', 'MRP管理者': 'mrp_controller',
@@ -56,12 +58,18 @@ class WipDataProcessor:
     def process_zp58(self, file_path: Path):
         logger.info(f"ZP58ファイルの処理を開始します: {file_path}")
         try:
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932', usecols=['指図／ネットワーク'])
+            encoding = 'cp932' if self.mode == 'prod' else 'utf-8'
+            logger.info(f"Using encoding: {encoding} for ZP58")
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding, usecols=['指図／ネットワーク'])
             df.rename(columns={'指図／ネットワーク': 'order_number'}, inplace=True)
             df.dropna(subset=['order_number'], inplace=True)
             df['order_number'] = df['order_number'].astype(str).str.strip()
-            # フィルタリング: 指図番号が'5'で始まるもののみ
-            df = df[df['order_number'].str.startswith('5', na=False)]
+
+            if self.mode == 'prod':
+                # フィルタリング: 指図番号が'5'で始まるもののみ
+                logger.info("本番モードのため、ZP58の指図番号フィルタ（'5'で始まる）を適用します。")
+                df = df[df['order_number'].str.startswith('5', na=False)]
+
             df.drop_duplicates(inplace=True)
             df.to_sql('zp58_records', self.conn, if_exists='replace', index=False)
             logger.info(f"{len(df)}件のZP58データをDBにロードしました。")
@@ -71,7 +79,9 @@ class WipDataProcessor:
     def process_zp02(self, file_path: Path):
         logger.info(f"ZP02ファイルの処理を開始します: {file_path}")
         try:
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932')
+            encoding = 'cp932' if self.mode == 'prod' else 'utf-8'
+            logger.info(f"Using encoding: {encoding} for ZP02")
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding)
 
             # フィルタリング: MRP管理者が'PC'で始まるもののみ
             if 'MRP管理者' in df.columns:
@@ -99,7 +109,8 @@ class WipDataProcessor:
     def process_storage_locations(self, file_path: Path):
         logger.info(f"保管場所一覧ファイルの処理を開始します: {file_path}")
         try:
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932')
+            # This file seems to be consistently utf-8-sig
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='utf-8-sig')
             column_mapping = {
                 'ﾌﾟﾗﾝﾄ': 'plant', '責任部署': 'responsible_dept', '棚卸報告区分': 'inventory_report_category',
                 '保管場所': 'storage_location', '保管場所名': 'storage_location_name', '工場在庫区分': 'factory_stock_category',
@@ -115,7 +126,9 @@ class WipDataProcessor:
     def process_zs65(self, file_path: Path):
         logger.info(f"ZS65ファイルの処理を開始します: {file_path}")
         try:
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='cp932')
+            encoding = 'cp932' if self.mode == 'prod' else 'utf-8'
+            logger.info(f"Using encoding: {encoding} for ZS65")
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding)
 
             # フィルタリング: プラントが'P100'のもののみ
             if 'プラント' in df.columns:
