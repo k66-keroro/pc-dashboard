@@ -408,6 +408,8 @@ class PcStockAnalysis:
                 zs.stagnant_days DESC;
             """
             df = pd.read_sql_query(query, self.conn)
+            if not df.empty:
+                df['滞留年数'] = df['滞留年数'].astype(int)
             logger.info(f"{len(df)}件のPC在庫明細データを取得しました。")
             return df
         except Exception as e:

@@ -62,7 +62,7 @@ class WipDataProcessor:
         try:
             encoding = 'cp932' if self.mode == 'prod' else 'utf-8'
             logger.info(f"Using encoding: {encoding} for ZP58")
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding, usecols=['指図／ネットワーク'])
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding)
             df.rename(columns={'指図／ネットワーク': 'order_number'}, inplace=True)
             df.dropna(subset=['order_number'], inplace=True)
             df['order_number'] = df['order_number'].astype(str).str.strip()
