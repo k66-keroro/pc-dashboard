@@ -65,7 +65,7 @@ class WipDataProcessor:
             df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding)
             df.rename(columns={'指図／ネットワーク': 'order_number'}, inplace=True)
             df.dropna(subset=['order_number'], inplace=True)
-            df['order_number'] = df['order_number'].astype(str).str.strip()
+            df['order_number'] = df['order_number'].astype(str).str.strip().str.lstrip('0')
 
             df.drop_duplicates(inplace=True)
             df.to_sql('zp58_records', self.conn, if_exists='replace', index=False)
