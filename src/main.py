@@ -154,7 +154,10 @@ def main():
                 logger.error("処理対象の仕掛明細ファイルが見つかりませんでした。--wip-file引数で直接パスを指定してください。")
                 sys.exit(1)
 
-            wip_processor = WipDataProcessor(conn)
+            mode = 'prod' if args.prod else 'dev'
+            logger.info(f"WIP同期を {mode} モードで実行します。")
+
+            wip_processor = WipDataProcessor(conn, mode=mode)
             wip_processor.run_all(
                 wip_details_path=wip_details_path,
                 zp58_path=zp58_path,

@@ -121,9 +121,9 @@ def main():
     kpi_cols_period[3].metric("総指図数", f"{period_kpis['unique_orders']}")
 
     # --- タブ表示 ---
-    tabs_list = ["グラフ分析", "日別レポート", "週別レポート", "明細データ", "仕掛進捗分析", "PC在庫分析", "エラーレポート", "在庫分析", "DBビューア"]
+    tabs_list = ["グラフ分析", "日別レポート", "週別レポート", "明細データ", "仕掛進捗分析", "PC在庫分析", "エラーレポート", "DBビューア"]
     (tab_graphs, tab_daily, tab_weekly, tab_details, tab_wip, tab_pc_stock,
-     tab_errors, tab_inventory, tab_db_viewer) = st.tabs(tabs_list)
+     tab_errors, tab_db_viewer) = st.tabs(tabs_list)
 
     with tab_graphs:
         col1, col2 = st.columns([2, 1])
@@ -219,6 +219,20 @@ def main():
                     file_name="wip_summary_comparison.csv",
                     mime='text/csv',
                 )
+
+                st.divider()
+                st.subheader("仕掛明細（材料未出庫フラグ付き）")
+                wip_details_df = wip_analyzer.get_wip_details_report()
+                if not wip_details_df.empty:
+                    st.dataframe(wip_details_df, use_container_width=True, hide_index=True)
+                    st.download_button(
+                        label="この明細をCSVでダウンロード",
+                        data=wip_details_df.to_csv(index=False, encoding='utf-8-sig'),
+                        file_name="wip_details_report.csv",
+                        mime='text/csv',
+                    )
+                else:
+                    st.info("表示する仕掛明細データがありません。")
             else:
                 st.warning("表示する仕掛データがありません。`--sync-wip`コマンドでデータを同期してください。")
         finally:
@@ -243,6 +257,20 @@ def main():
                     file_name="pc_stock_summary.csv",
                     mime='text/csv',
                 )
+
+                st.divider()
+                st.subheader("滞留在庫 明細一覧")
+                pc_stock_details_df = pc_stock_analyzer.get_pc_stock_details_report()
+                if not pc_stock_details_df.empty:
+                    st.dataframe(pc_stock_details_df.style.format({'金額': "{:,.0f}", '数量': '{:,.3f}'}), use_container_width=True, hide_index=True)
+                    st.download_button(
+                        label="この明細をCSVでダウンロード",
+                        data=pc_stock_details_df.to_csv(index=False, encoding='utf-8-sig'),
+                        file_name="pc_stock_details.csv",
+                        mime='text/csv',
+                    )
+                else:
+                    st.info("表示する明細データがありません。")
             else:
                 st.warning("表示するPC在庫データがありません。`--sync-wip`コマンドでデータを同期してください。")
         finally:
@@ -275,37 +303,6 @@ def main():
                 st.success("未登録品目エラーは見つかりませんでした。")
         finally:
             conn.close()
-
-    with tab_inventory:
-        st.header("滞留在庫分析レポート")
-        st.info("指定した日数以上、生産実績のない（動きのない）品目を表示します。この分析は「生産実績」データに基づきます。")
-
-        # 分析の前提となるデータが存在するかチェック
-        if df.empty:
-            st.warning("生産実績データがありません。")
-        else:
-            # 滞留日数の閾値をユーザーに設定させる
-            threshold_days = st.number_input(
-                "滞留日数の閾値を入力してください",
-                min_value=1,
-                max_value=365,
-                value=30,  # デフォルト値
-                step=10,
-                help="この日数を超えて生産実績がない品目を「滞留」とみなします。"
-            )
-
-            conn = get_db_connection()
-            try:
-                inventory_analyzer = InventoryAnalysis(conn)
-                stagnant_items_df = inventory_analyzer.get_stagnant_items(threshold_days)
-
-                if not stagnant_items_df.empty:
-                    st.subheader(f"{threshold_days}日以上動きのない品目リスト")
-                    st.dataframe(stagnant_items_df, use_container_width=True, hide_index=True)
-                else:
-                    st.info(f"現在、{threshold_days}日以上動きのない品目はありませんでした。")
-            finally:
-                conn.close()
 
     with tab_db_viewer:
         st.header("データベースビューア")
