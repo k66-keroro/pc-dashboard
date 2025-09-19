@@ -66,13 +66,17 @@ class DataProcessor:
             if initial_rows > len(master_df):
                 logger.warning(f"CSVマスター内で{initial_rows - len(master_df)}件の重複を検出し、最新のデータで上書きしました。")
 
+            # DBテーブルに存在する列のみに絞り込む
+            cols_to_insert = ['item_code', 'standard_cost']
+            final_master_df = master_df[cols_to_insert]
+
             cursor = self.db_conn.cursor()
             logger.info("既存の品目マスターデータを削除します...")
             cursor.execute("DELETE FROM item_master;")
             logger.info("CSVから新しい品目マスターデータを挿入します...")
-            master_df.to_sql('item_master', self.db_conn, if_exists='append', index=False)
+            final_master_df.to_sql('item_master', self.db_conn, if_exists='append', index=False)
             self.db_conn.commit()
-            logger.info(f"品目マスターの同期が完了しました。{len(master_df)}件のレコードを処理しました。")
+            logger.info(f"品目マスターの同期が完了しました。{len(final_master_df)}件のレコードを処理しました。")
         except FileNotFoundError:
             logger.error(f"品目マスターファイルが見つかりません: {master_path}")
         except Exception as e:
