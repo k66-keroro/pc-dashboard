@@ -215,7 +215,7 @@ class WipAnalysis:
         LEFT JOIN
             zp02_records z02 ON d.order_number = z02.order_number
         LEFT JOIN
-            zp58_records z58 ON d.order_number = z58.order_number
+            (SELECT DISTINCT order_number FROM zp58_records WHERE order_number LIKE '5%') z58 ON d.order_number = z58.order_number
         WHERE
             d.mrp_controller LIKE 'P%';
         """
@@ -317,7 +317,7 @@ class WipAnalysis:
             LEFT JOIN
                 zp02_records z02 ON d.order_number = z02.order_number
             LEFT JOIN
-                zp58_records z58 ON d.order_number = z58.order_number
+                (SELECT DISTINCT order_number FROM zp58_records WHERE order_number LIKE '5%') z58 ON d.order_number = z58.order_number
             WHERE
                 d.mrp_controller LIKE 'P%'
                 AND (z02.order_status IS NULL OR z02.order_status NOT IN ('TECO', 'DLV'));
