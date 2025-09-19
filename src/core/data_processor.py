@@ -35,20 +35,28 @@ class DataProcessor:
     def sync_master_from_csv(self, master_path: Path):
         logger.info(f"品目マスターの同期（洗い替え）を開始します: {master_path}")
         try:
-            # MARA_DL.csvのエンコードUTF-16固定、プラント列も読み込み
-            use_cols = ['品目', '標準原価', 'プラント']
+            # MARA_DL.csvを読み込む。エンコードはUTF-16、セパレータは自動判別。
+            # usecolsは指定せず、全列を読み込んでから処理する。
             master_df = pd.read_csv(
-                master_path, sep='\t', engine='python',
-                dtype={'品目': str, '標準原価': float, 'プラント': str},
-                encoding='utf-16', usecols=use_cols
+                master_path, sep=None, engine='python',
+                encoding='utf-16'
             )
 
-            master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
+            # P100プラントでフィルタ（列が存在する場合のみ）
+            if 'プラント' in master_df.columns:
+                initial_count = len(master_df)
+                master_df = master_df[master_df['プラント'] == 'P100'].copy()
+                logger.info(f"P100プラントでフィルタリング: {initial_count}件 → {len(master_df)}件")
+            else:
+                logger.warning("マスターファイルに 'プラント' 列が見つからないため、フィルタリングをスキップします。")
 
-            # P100プラントでフィルタ
-            initial_count = len(master_df)
-            master_df = master_df[master_df['プラント'] == 'P100'].copy()
-            logger.info(f"MARA_DL.csv読み込み完了: 全{initial_count}件 → P100フィルタ後{len(master_df)}件")
+            # 必要な列が存在するか確認
+            required_cols = {'品目': 'item_code', '標準原価': 'standard_cost'}
+            if not all(col in master_df.columns for col in required_cols.keys()):
+                logger.error(f"マスターファイルに必要な列 {list(required_cols.keys())} がありません。")
+                return
+
+            master_df.rename(columns=required_cols, inplace=True)
 
             if 'item_code' in master_df.columns:
                 master_df['item_code'] = master_df['item_code'].str.strip()
