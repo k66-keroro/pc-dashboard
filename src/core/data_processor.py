@@ -35,27 +35,20 @@ class DataProcessor:
     def sync_master_from_csv(self, master_path: Path):
         logger.info(f"品目マスターの同期（洗い替え）を開始します: {master_path}")
         try:
-            try:
-                use_cols = ['品目', '標準原価']
-                master_df = pd.read_csv(
-                    master_path, sep=None, engine='python',
-                    dtype={'品目': str, '標準原価': float},
-                    encoding='utf-8', usecols=use_cols
-                )
-            except UnicodeDecodeError:
-                logger.warning("UTF-8での読み込みに失敗しました。UTF-16で再試行します。")
-                master_df = pd.read_csv(
-                    master_path, sep=None, engine='python',
-                    dtype={'品目': str, '標準原価': float},
-                    encoding='utf-16', usecols=use_cols
-                )
+            # MARA_DL.csvのエンコードUTF-16固定、プラント列も読み込み
+            use_cols = ['品目', '標準原価', 'プラント']
+            master_df = pd.read_csv(
+                master_path, sep='\t', engine='python',
+                dtype={'品目': str, '標準原価': float, 'プラント': str},
+                encoding='utf-16', usecols=use_cols
+            )
 
             master_df.rename(columns={'品目': 'item_code', '標準原価': 'standard_cost'}, inplace=True)
 
-            # フィルタリング: プラントが'P100'のもののみ
-            if 'プラント' in master_df.columns:
-                master_df = master_df[master_df['プラント'] == 'P100']
-                logger.info(f"P100でフィルタリング後、{len(master_df)}件のレコード。")
+            # P100プラントでフィルタ
+            initial_count = len(master_df)
+            master_df = master_df[master_df['プラント'] == 'P100'].copy()
+            logger.info(f"MARA_DL.csv読み込み完了: 全{initial_count}件 → P100フィルタ後{len(master_df)}件")
 
             if 'item_code' in master_df.columns:
                 master_df['item_code'] = master_df['item_code'].str.strip()

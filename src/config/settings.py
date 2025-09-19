@@ -46,3 +46,25 @@ DB_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+def check_network_file_access():
+    """本番ファイルへのアクセス可能性をチェック"""
+    import os
+    logger = logging.getLogger(__name__)
+    network_files = [
+        PROD_DATA_PATH,
+        PROD_MASTER_PATH,
+        PROD_ZP02_PATH,
+        PROD_ZP58_PATH,
+        PROD_ZS65_PATH
+    ]
+
+    accessible_files = {}
+    for file_path in network_files:
+        try:
+            accessible_files[str(file_path)] = os.path.exists(file_path)
+        except Exception as e:
+            accessible_files[str(file_path)] = False
+            logger.warning(f"ネットワークファイルアクセスエラー: {file_path}, エラー: {e}")
+
+    return accessible_files

@@ -223,7 +223,7 @@ class WipAnalysis:
 
     def get_wip_summary_comparison(self) -> pd.DataFrame:
         """
-        完了品を除外する前と後での仕掛状況を比較したサマリーを返す。
+        完了品を除外する前と後での仕掛状況を比較したサマリーを返す。（機能改善版）
         """
         logger.info("仕掛進捗の比較サマリー分析を開始します。")
         try:
@@ -239,28 +239,57 @@ class WipAnalysis:
             ).reset_index()
 
             # 2. 完了(TECO, DLV)を除いた仕掛データの集計
-            remaining_df = base_df[
-                ~base_df['order_status'].isin(['TECO', 'DLV'])
-            ]
+            remaining_df = base_df[~base_df['order_status'].isin(['TECO', 'DLV'])]
             remaining_agg = remaining_df.groupby('wip_age').agg(
                 remaining_amount=('amount_jpy', 'sum'),
                 remaining_count=('item_code', 'count')
             ).reset_index()
 
             # 3. 二つの集計結果を結合
-            comparison_df = pd.merge(total_agg, remaining_agg, on='wip_age', how='left').fillna(0)
-
-            # 列名を日本語にリネームして最終的な出力とする
-            comparison_df.rename(columns={
-                'wip_age': '仕掛年齢',
-                'total_amount': '当初金額',
-                'total_count': '当初件数',
-                'remaining_amount': '残高金額',
-                'remaining_count': '残高件数'
+            df = pd.merge(total_agg, remaining_agg, on='wip_age', how='left').fillna(0)
+            df.rename(columns={
+                'wip_age': '仕掛年齢', 'total_amount': '当初金額', 'total_count': '当初件数',
+                'remaining_amount': '残高金額', 'remaining_count': '残高件数'
             }, inplace=True)
 
+            # 4. 残比率の追加
+            df['残金額比'] = (df['残高金額'] / df['当初金額'] * 100).round(1)
+            df['残件数比'] = (df['残高件数'] / df['当初件数'] * 100).round(1)
+            # 0除算でinfになる場合を0で置換
+            df.replace([float('inf'), float('-inf')], 0, inplace=True)
+            df['残金額比'] = df['残金額比'].fillna(0).astype(str) + '%'
+            df['残件数比'] = df['残件数比'].fillna(0).astype(str) + '%'
+
+
+            # 5. 仕掛年齢のソートキー関数
+            def sort_wip_age(age_string):
+                import re
+                if not isinstance(age_string, str): return "99年99ケ月" # 合計行などを末尾にする
+                match = re.match(r'(\d+)年(\d+)ケ月', age_string)
+                if match:
+                    years = int(match.group(1))
+                    months = int(match.group(2))
+                    return f"{years:02d}年{months:02d}ケ月"
+                return age_string # マッチしない場合は元の文字列を返す
+
+            # '合計'行を除いてソート
+            df_sorted = df.sort_values('仕掛年齢', key=lambda x: x.map(sort_wip_age), ascending=False)
+
+            # 6. 合計行の追加
+            total_row = pd.DataFrame([{
+                '仕掛年齢': '合計',
+                '当初金額': df['当初金額'].sum(),
+                '当初件数': df['当初件数'].sum(),
+                '残高金額': df['残高金額'].sum(),
+                '残高件数': df['残高件数'].sum(),
+                '残金額比': f"{(df['残高金額'].sum() / df['当初金額'].sum() * 100).round(1)}%" if df['当初金額'].sum() > 0 else "0.0%",
+                '残件数比': f"{(df['残高件数'].sum() / df['当初件数'].sum() * 100).round(1)}%" if df['当初件数'].sum() > 0 else "0.0%"
+            }])
+
+            df_with_total = pd.concat([df_sorted, total_row], ignore_index=True)
+
             logger.info("仕掛進捗の比較サマリー分析が完了しました。")
-            return comparison_df
+            return df_with_total
 
         except Exception as e:
             logger.error(f"仕掛進捗サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
@@ -367,10 +396,65 @@ class PcStockAnalysis:
             }, inplace=True)
 
             logger.info("PC在庫のサマリー分析が完了しました。")
-            return summary_df.sort_values(by=['区分', '滞留年数'])
+            return summary_df.sort_values(by='滞留年数', ascending=False)
 
         except Exception as e:
             logger.error(f"PC在庫サマリーの分析中にエラーが発生しました: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    def _get_base_pc_stock_data(self) -> pd.DataFrame:
+        """PC在庫分析の基礎となるデータを取得する内部メソッド"""
+        query = """
+        SELECT
+            sl.responsible_dept,
+            sl.inventory_report_category,
+            sl.storage_location,
+            sl.storage_location_name,
+            zs.item_code,
+            zs.item_text,
+            zs.available_stock AS quantity,
+            zs.available_value AS amount,
+            zs.stagnant_days
+        FROM
+            zs65_records zs
+        LEFT JOIN
+            storage_locations sl ON zs.storage_location = sl.storage_location
+        WHERE
+            sl.inventory_report_category = '3_PC'
+            AND zs.plant = 'P100'
+            AND sl.factory_stock_category = 'Yes';
+        """
+        df = pd.read_sql_query(query, self.conn)
+
+        if not df.empty:
+            df['stagnant_days'] = pd.to_numeric(df['stagnant_days'], errors='coerce').fillna(0)
+            df['stagnant_years'] = (df['stagnant_days'] / 365).round() # 滞留年数を計算
+        return df
+
+    def get_category_summary(self) -> pd.DataFrame:
+        """区分ごとの集計サマリーを作成する"""
+        logger.info("PC在庫の区分別サマリー分析を開始します。")
+        try:
+            df = self._get_base_pc_stock_data()
+            if df.empty:
+                return pd.DataFrame()
+
+            def assign_category(days):
+                if days > 730: return 'a. 2年以上'
+                if days > 365: return 'b. 1年以上'
+                return 'c. 1年未満'
+            df['区分'] = df['stagnant_days'].apply(assign_category)
+
+            category_summary = df.groupby('区分').agg(
+                在庫金額=('amount', 'sum'),
+                在庫件数=('item_code', 'nunique'),
+                平均滞留年数=('stagnant_years', 'mean')
+            ).round(2).reset_index()
+
+            logger.info("PC在庫の区分別サマリー分析が完了しました。")
+            return category_summary.sort_values(by='区分')
+        except Exception as e:
+            logger.error(f"PC在庫の区分別サマリー分析中にエラーが発生しました: {e}", exc_info=True)
             return pd.DataFrame()
 
     def get_pc_stock_details_report(self) -> pd.DataFrame:

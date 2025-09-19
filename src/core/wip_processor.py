@@ -60,9 +60,7 @@ class WipDataProcessor:
     def process_zp58(self, file_path: Path):
         logger.info(f"ZP58ファイルの処理を開始します: {file_path}")
         try:
-            encoding = 'cp932' if self.mode == 'prod' else 'utf-8'
-            logger.info(f"Using encoding: {encoding} for ZP58")
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding)
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='shift_jis')
             df.rename(columns={'指図／ネットワーク': 'order_number'}, inplace=True)
             df.dropna(subset=['order_number'], inplace=True)
             # ゼロパディングされた文字列を数値に変換し、再度文字列に戻すことで正規化する
@@ -79,9 +77,7 @@ class WipDataProcessor:
     def process_zp02(self, file_path: Path):
         logger.info(f"ZP02ファイルの処理を開始します: {file_path}")
         try:
-            encoding = 'cp932' if self.mode == 'prod' else 'utf-8'
-            logger.info(f"Using encoding: {encoding} for ZP02")
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding)
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='shift_jis')
 
             # フィルタリング: MRP管理者が'PC'で始まるもののみ
             if 'MRP管理者' in df.columns:
@@ -126,9 +122,7 @@ class WipDataProcessor:
     def process_zs65(self, file_path: Path):
         logger.info(f"ZS65ファイルの処理を開始します: {file_path}")
         try:
-            encoding = 'cp932' if self.mode == 'prod' else 'utf-8'
-            logger.info(f"Using encoding: {encoding} for ZS65")
-            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding=encoding)
+            df = pd.read_csv(file_path, sep='\\t', engine='python', encoding='shift_jis')
 
             # フィルタリング: プラントが'P100'のもののみ
             if 'プラント' in df.columns:

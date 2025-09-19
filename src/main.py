@@ -54,19 +54,36 @@ def find_latest_wip_file(directory: Path) -> Path:
     return latest_file
 
 def run_pipeline(conn: sqlite3.Connection, data_path: Path):
-    """
-    一回のデータ処理パイプラインを実行する。
-    """
+    """一回のデータ処理パイプラインを実行する（エラーハンドリング強化版）"""
     logger.info("パイプライン処理を開始します。")
-    try:
-        if data_path and data_path.exists():
-            mod_time_ts = os.path.getmtime(data_path)
-            mod_time = datetime.datetime.fromtimestamp(mod_time_ts)
-            logger.info(f"読み込み対象ファイルの最終更新日時: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        else:
-            logger.warning(f"データファイルが見つかりません: {data_path}")
-            return
 
+    # ファイル存在チェック（最大3回リトライ）
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            if data_path and data_path.exists():
+                mod_time_ts = os.path.getmtime(data_path)
+                mod_time = datetime.datetime.fromtimestamp(mod_time_ts)
+                logger.info(f"読み込み対象ファイルの最終更新日時: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                break
+            else:
+                logger.warning(f"データファイルが見つかりません: {data_path} (試行 {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(30)  # 30秒待機してリトライ
+                    continue
+                else:
+                    logger.error(f"データファイルにアクセスできませんでした: {data_path}")
+                    return
+        except Exception as e:
+            logger.warning(f"ファイルアクセス中にエラーが発生しました: {e} (試行 {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                time.sleep(30)
+                continue
+            else:
+                logger.error(f"ファイルアクセスに失敗しました: {data_path}")
+                return
+
+    try:
         processor = DataProcessor(conn)
         summary = processor.process_file_and_load_to_db(data_path)
 
@@ -112,7 +129,17 @@ def main():
     parser.add_argument('--sync-wip', action='store_true', help='仕掛関連ファイルをデータベースに同期して終了します。')
     parser.add_argument('--wip-file', type=Path, help='処理対象の仕掛明細ファイルへのフルパス（オプション）。本番モードで自動検出を上書きする場合に使用。')
     parser.add_argument('--prod', action='store_true', help='本番モードで実行し、ネットワークパス上のファイルを参照します。')
+    parser.add_argument('--single-run', action='store_true', help='1回だけデータ処理を実行して終了します（スケジューラー用）')
+    parser.add_argument('--health-check', action='store_true', help='システムの健全性をチェックして終了します')
     args = parser.parse_args()
+
+    if args.health_check:
+        from src.utils.health_check import HealthChecker
+        import json
+        checker = HealthChecker()
+        status = checker.check_system_health()
+        print(json.dumps(status, indent=2, ensure_ascii=False))
+        sys.exit(0)
 
     if args.prod:
         logger.info("本番モードで実行します。")
@@ -168,11 +195,15 @@ def main():
             logger.info("仕掛・在庫関連ファイルの同期が完了しました。プログラムを終了します。")
             sys.exit(0)
 
-        logger.info("常駐サービスモードで起動します。1時間ごとにデータ処理を実行します。")
-        while True:
+        if args.single_run:
             run_pipeline(conn, data_path)
-            logger.info("次の実行まで1時間待機します...")
-            time.sleep(3600)
+            logger.info("単発実行完了。プログラムを終了します。")
+        else:
+            logger.info("常駐サービスモードで起動します。1時間ごとにデータ処理を実行します。")
+            while True:
+                run_pipeline(conn, data_path)
+                logger.info("次の実行まで1時間待機します...")
+                time.sleep(3600)
 
     except Exception as e:
         logger.critical(f"アプリケーションの起動またはマイグレーション中に致命的なエラーが発生しました: {e}", exc_info=True)

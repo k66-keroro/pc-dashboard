@@ -11,11 +11,11 @@ from src.config import settings
 
 st.set_page_config(layout="wide", page_title="PC製造部門向けダッシュボード")
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_and_prepare_data():
     """
     DBからデータをロードし、前処理と分析列の追加を行う。
-    この関数はキャッシュされ、2回目以降の実行は高速です。
+    この関数は1時間キャッシュされ、2回目以降の実行は高速です。
     """
     conn = get_db_connection()
     try:
@@ -80,12 +80,39 @@ def main():
 
     # --- サイドバー ---
     st.sidebar.header("表示設定")
+
+    # --- 期間選択 ---
     min_date = df['completion_date'].min()
     max_date = df['completion_date'].max()
-    start_date, end_date = st.sidebar.date_input(
-        "期間を選択", value=(min_date, max_date),
-        min_value=min_date, max_value=max_date, format="YYYY/MM/DD"
+
+    period_selection = st.sidebar.radio(
+        "期間プリセット",
+        options=['全期間', '今週', '先週', '先月', 'カスタム'],
+        horizontal=True, index=0
     )
+
+    today = datetime.date.today()
+    if period_selection == '今週':
+        start_date = today - datetime.timedelta(days=today.weekday())
+        end_date = today
+    elif period_selection == '先週':
+        start_of_this_week = today - datetime.timedelta(days=today.weekday())
+        end_date = start_of_this_week - datetime.timedelta(days=1)
+        start_date = end_date - datetime.timedelta(days=6)
+    elif period_selection == '先月':
+        first_day_this_month = today.replace(day=1)
+        end_date = first_day_this_month - datetime.timedelta(days=1)
+        start_date = end_date.replace(day=1)
+    elif period_selection == 'カスタム':
+        start_date, end_date = st.sidebar.date_input(
+            "期間を選択", value=(min_date, max_date),
+            min_value=min_date, max_value=max_date, format="YYYY/MM/DD"
+        )
+    else: # 全期間
+        start_date, end_date = min_date, max_date
+
+    st.sidebar.info(f"選択期間: {start_date.strftime('%Y/%m/%d')}～{end_date.strftime('%Y/%m/%d')}")
+
     agg_target = st.sidebar.radio("集計対象", ('金額', '実績数量'), horizontal=True)
     agg_column = 'amount' if agg_target == '金額' else 'actual_quantity'
     agg_label = "金額" if agg_target == '金額' else "数量"
@@ -245,32 +272,43 @@ def main():
         conn = get_db_connection()
         try:
             pc_stock_analyzer = PcStockAnalysis(conn)
-            pc_stock_summary_df = pc_stock_analyzer.get_pc_stock_summary()
 
-            if not pc_stock_summary_df.empty:
-                st.subheader("滞留年数・区分別 サマリー")
-                st.dataframe(pc_stock_summary_df.style.format({'金額': "{:,.0f}"}), use_container_width=True, hide_index=True)
+            st.subheader("区分別集計")
+            category_summary_df = pc_stock_analyzer.get_category_summary()
+            if not category_summary_df.empty:
+                st.dataframe(category_summary_df.style.format({'在庫金額': '{:,.0f}', '平均滞留年数': '{:.1f}年'}), use_container_width=True, hide_index=True)
+            else:
+                st.info("集計データがありません。")
+
+            st.divider()
+
+            st.subheader("滞留在庫 明細一覧（滞留年数 降順）")
+            pc_stock_details_df = pc_stock_analyzer.get_pc_stock_details_report()
+            if not pc_stock_details_df.empty:
+                # 滞留強調表示
+                def highlight_aging_items(df, aging_threshold_days=365):
+                    def color_aging(row):
+                        days = row['滞留日数']
+                        color = ''
+                        if days > aging_threshold_days:
+                            color = '#ffcccc'  # 赤系
+                        elif days > aging_threshold_days * 0.5:
+                            color = '#fff2cc'  # 黄系
+
+                        if color:
+                            return [f'background-color: {color}'] * len(row)
+                        return [''] * len(row)
+                    return df.style.apply(color_aging, axis=1)
+
+                styled_df = highlight_aging_items(pc_stock_details_df)
+                st.dataframe(styled_df.format({'金額': "{:,.0f}", '数量': '{:,.3f}', '滞留年数': '{:.0f}年'}), use_container_width=True, hide_index=True)
 
                 st.download_button(
-                    label="このサマリーをCSVでダウンロード",
-                    data=pc_stock_summary_df.to_csv(index=False, encoding='utf-8-sig'),
-                    file_name="pc_stock_summary.csv",
+                    label="この明細をCSVでダウンロード",
+                    data=pc_stock_details_df.to_csv(index=False, encoding='utf-8-sig'),
+                    file_name="pc_stock_details.csv",
                     mime='text/csv',
                 )
-
-                st.divider()
-                st.subheader("滞留在庫 明細一覧")
-                pc_stock_details_df = pc_stock_analyzer.get_pc_stock_details_report()
-                if not pc_stock_details_df.empty:
-                    st.dataframe(pc_stock_details_df.style.format({'金額': "{:,.0f}", '数量': '{:,.3f}'}), use_container_width=True, hide_index=True)
-                    st.download_button(
-                        label="この明細をCSVでダウンロード",
-                        data=pc_stock_details_df.to_csv(index=False, encoding='utf-8-sig'),
-                        file_name="pc_stock_details.csv",
-                        mime='text/csv',
-                    )
-                else:
-                    st.info("表示する明細データがありません。")
             else:
                 st.warning("表示するPC在庫データがありません。`--sync-wip`コマンドでデータを同期してください。")
         finally:
