@@ -72,6 +72,10 @@ def main():
         st.info("本番モードで実行中（表示データは本番DBを参照します）")
 
     st.title("PC製造部門向けダッシュボード")
+
+    # 1時間ごとに自動リフレッシュ
+    st.html('<meta http-equiv="refresh" content="3600">')
+
     df = load_and_prepare_data()
 
     if df.empty:
