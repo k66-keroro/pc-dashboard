@@ -11,7 +11,7 @@ from src.config import settings
 
 st.set_page_config(layout="wide", page_title="PC製造部門向けダッシュボード")
 
-@st.cache_data(ttl=3600)
+#@st.cache_data(ttl=3600)
 def load_and_prepare_data():
     """
     DBからデータをロードし、前処理と分析列の追加を行う。
