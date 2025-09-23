@@ -30,7 +30,7 @@ if not exist "src\main.py" (
 
 echo --- Starting background data update ---
 if exist "src\main.py" (
-    start "PC-Dashboard Data Update" /B python\python.exe src\main.py --single-run
+    start "PC-Dashboard Data Update" /B python\python.exe -m src.main --single-run
     echo A one-time data update is running in the background.
 )
 echo.

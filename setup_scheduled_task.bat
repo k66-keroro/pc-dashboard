@@ -8,8 +8,8 @@ echo.
 echo This script will create a Windows Scheduled Task to automatically
 echo update the dashboard's data every hour.
 echo.
-echo The task will run the following command:
-echo %~dp0python\python.exe %~dp0src\main.py --single-run
+echo The task will run the data update script from the application's
+echo root directory to ensure all modules are found correctly.
 echo.
 echo Administrator rights may be required to create scheduled tasks.
 echo If this script fails, please try running it as an administrator.
@@ -19,7 +19,7 @@ echo.
 
 REM --- Define Task Details ---
 set TASK_NAME="PC-Dashboard Hourly Update"
-set TASK_RUN="%~dp0python\python.exe %~dp0src\main.py --single-run"
+set TASK_RUN="cmd /c \"cd /d %~dp0 && %~dp0python\python.exe -m src.main --single-run\""
 
 echo Creating/updating scheduled task with the following properties:
 echo   Task Name: %TASK_NAME%
