@@ -1,4 +1,7 @@
 import streamlit as st
+import os
+import sys
+sys.path.append(os.getcwd())
 import pandas as pd
 import datetime
 import altair as alt
