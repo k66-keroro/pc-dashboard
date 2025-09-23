@@ -179,7 +179,7 @@ def main():
                 text=alt.Text('percentage', format='.1%')
             )
 
-            st.altair_chart(pie + text, use_container_width=True)
+            st.altair_chart(pie + text, width='stretch')
         st.subheader(f"{agg_label} TOP 10品目")
         top_10_items = filtered_df.groupby('item_text')[agg_column].sum().nlargest(10).sort_values(ascending=True)
         st.bar_chart(top_10_items, horizontal=True)
@@ -199,13 +199,13 @@ def main():
             label="このデータをCSVでダウンロード", data=display_df.to_csv(index=False, encoding='utf-8-sig'),
             file_name=f"details_{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}.csv", mime='text/csv',
         )
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, width='stretch', hide_index=True)
 
     with tab_daily:
         st.header("日別サマリーレポート")
         daily_summary = filtered_df.groupby(['week_category', 'completion_date', 'mrp_controller'])[agg_column].sum().unstack(fill_value=0)
         daily_summary['日別合計'] = daily_summary.sum(axis=1)
-        st.dataframe(daily_summary.style.format("{:,.0f}"), use_container_width=True)
+        st.dataframe(daily_summary.style.format("{:,.0f}"), width='stretch')
 
     with tab_weekly:
         st.header("週別サマリーレポート")
@@ -217,7 +217,7 @@ def main():
         total_row_type.name = '合計'
         weekly_summary_type = pd.concat([weekly_summary_type, pd.DataFrame(total_row_type).T])
         weekly_summary_type.index = weekly_summary_type.index.astype(str) # Arrowエラー対策
-        st.dataframe(weekly_summary_type.style.format("{:,.0f}"), use_container_width=True)
+        st.dataframe(weekly_summary_type.style.format("{:,.0f}"), width='stretch')
 
         st.subheader("MRP管理者別")
         weekly_summary_ctrl = filtered_df.groupby(['week_category', 'mrp_controller'])[agg_column].sum().unstack(fill_value=0)
@@ -226,7 +226,7 @@ def main():
         total_row_ctrl.name = '合計'
         weekly_summary_ctrl = pd.concat([weekly_summary_ctrl, pd.DataFrame(total_row_ctrl).T])
         weekly_summary_ctrl.index = weekly_summary_ctrl.index.astype(str) # Arrowエラー対策
-        st.dataframe(weekly_summary_ctrl.style.format("{:,.0f}"), use_container_width=True)
+        st.dataframe(weekly_summary_ctrl.style.format("{:,.0f}"), width='stretch')
 
     with tab_wip:
         st.header("仕掛進捗分析")
@@ -245,7 +245,7 @@ def main():
                     '当初件数': '{:,.0f}',
                     '残高金額': '{:,.0f}',
                     '残高件数': '{:,.0f}'
-                }), use_container_width=True, hide_index=True)
+                }), width='stretch', hide_index=True)
 
                 st.download_button(
                     label="このサマリーをCSVでダウンロード",
@@ -258,7 +258,7 @@ def main():
                 st.subheader("仕掛明細（材料未出庫フラグ付き）")
                 wip_details_df = wip_analyzer.get_wip_details_report()
                 if not wip_details_df.empty:
-                    st.dataframe(wip_details_df, use_container_width=True, hide_index=True)
+                    st.dataframe(wip_details_df, width='stretch', hide_index=True)
                     st.download_button(
                         label="この明細をCSVでダウンロード",
                         data=wip_details_df.to_csv(index=False, encoding='utf-8-sig'),
@@ -283,7 +283,7 @@ def main():
             st.subheader("区分別集計")
             category_summary_df = pc_stock_analyzer.get_category_summary()
             if not category_summary_df.empty:
-                st.dataframe(category_summary_df.style.format({'在庫金額': '{:,.0f}', '平均滞留年数': '{:.1f}年'}), use_container_width=True, hide_index=True)
+                st.dataframe(category_summary_df.style.format({'在庫金額': '{:,.0f}', '平均滞留年数': '{:.1f}年'}), width='stretch', hide_index=True)
             else:
                 st.info("集計データがありません。")
 
@@ -308,7 +308,7 @@ def main():
                     return df.style.apply(color_aging, axis=1)
 
                 styled_df = highlight_aging_items(pc_stock_details_df)
-                st.dataframe(styled_df.format({'金額': "{:,.0f}", '数量': '{:,.3f}', '滞留年数': '{:.0f}年'}), use_container_width=True, hide_index=True)
+                st.dataframe(styled_df.format({'金額': "{:,.0f}", '数量': '{:,.3f}', '滞留年数': '{:.0f}年'}), width='stretch', hide_index=True)
 
                 st.download_button(
                     label="この明細をCSVでダウンロード",
@@ -332,7 +332,7 @@ def main():
             st.info("「計画数 - 完成数」と「残数」が一致しない実績データを表示します。")
             quantity_errors_df = error_detector.find_quantity_inconsistencies()
             if not quantity_errors_df.empty:
-                st.dataframe(quantity_errors_df, use_container_width=True, hide_index=True)
+                st.dataframe(quantity_errors_df, width='stretch', hide_index=True)
             else:
                 st.success("数量の不整合エラーは見つかりませんでした。")
 
@@ -343,7 +343,7 @@ def main():
             st.info("品目マスターに登録されていない品目の実績データを表示します。")
             unregistered_items_df = error_detector.find_unregistered_items()
             if not unregistered_items_df.empty:
-                st.dataframe(unregistered_items_df, use_container_width=True, hide_index=True)
+                st.dataframe(unregistered_items_df, width='stretch', hide_index=True)
             else:
                 st.success("未登録品目エラーは見つかりませんでした。")
         finally:
@@ -372,7 +372,7 @@ def main():
                     st.subheader(f"`{selected_table}` テーブルの内容")
                     try:
                         table_df = pd.read_sql_query(f"SELECT * FROM {selected_table} LIMIT 200", conn)
-                        st.dataframe(table_df, use_container_width=True, hide_index=True)
+                        st.dataframe(table_df, width='stretch', hide_index=True)
                     except Exception as e:
                         st.error(f"テーブルデータの読み込み中にエラーが発生しました: {e}")
         finally:

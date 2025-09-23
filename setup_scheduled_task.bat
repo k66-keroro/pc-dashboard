@@ -19,17 +19,14 @@ echo.
 
 REM --- Define Task Details ---
 set TASK_NAME="PC-Dashboard Hourly Update"
-set TASK_RUN="cmd /c \"cd /d %~dp0 && %~dp0python\python.exe -m src.main --single-run\""
 
-echo Creating/updating scheduled task with the following properties:
-echo   Task Name: %TASK_NAME%
-echo   Run Command: %TASK_RUN%
-echo   Schedule:  HOURLY
+echo Creating/updating scheduled task: %TASK_NAME%
 echo.
 
 REM --- Create/Update Scheduled Task ---
-REM /f allows the task to be updated if it already exists.
-schtasks /create /tn %TASK_NAME% /tr %TASK_RUN% /sc hourly /f
+REM /sd sets the starting directory for the task, which is crucial for Python's module resolution.
+REM /tr specifies the executable and its arguments. The path to the executable is quoted.
+schtasks /create /tn %TASK_NAME% /sc hourly /f /sd "%~dp0" /tr "\"%~dp0python\python.exe\" -m src.main --single-run"
 
 REM --- Check for errors ---
 if %errorlevel% neq 0 (
