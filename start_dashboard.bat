@@ -22,11 +22,6 @@ if not exist "src\app.py" (
     pause
     exit /b 1
 )
-if not exist "src\main.py" (
-    echo [WARNING] Data update script 'src\main.py' not found.
-    echo Will start the dashboard without updating data.
-    echo.
-)
 
 echo --- Starting background data update ---
 if exist "src\main.py" (
@@ -43,9 +38,6 @@ echo This window must remain open to keep the dashboard running.
 echo To stop the dashboard, simply close this window.
 echo.
 
-REM ★この行を修正してください
-REM 修正前: python\python.exe -m streamlit run src pp.py --server.headless true --server.port 8501
-REM python\python.exe -m streamlit run src\app.py --server.headless true --server.port 8501
 python\python.exe -m streamlit run src\app.py --server.port 8501
 
 echo.
