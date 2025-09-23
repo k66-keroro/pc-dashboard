@@ -27,7 +27,9 @@ echo.
 
 REM --- Create/Update Scheduled Task ---
 REM /tr points to the simple helper script. The quotes around %TASK_TO_RUN% handle spaces in the path.
-schtasks /create /tn %TASK_NAME% /sc hourly /f /tr %TASK_TO_RUN%
+REM /st sets the start time. 00:05 means it will run at 01:05, 02:05, etc.
+REM /RL HIGHEST runs the task with elevated privileges.
+schtasks /create /tn %TASK_NAME% /sc hourly /f /tr %TASK_TO_RUN% /st 00:05 /RL HIGHEST
 
 REM --- Check for errors ---
 if %errorlevel% neq 0 (
