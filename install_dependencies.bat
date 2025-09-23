@@ -27,38 +27,43 @@ echo [OK] Python executable found.
 echo.
 
 REM --- Step 2: Guide user to enable pip ---
-echo --- Automating pip enablement ---
+echo --- Automating Python Path Configuration ---
 echo Automatically configuring Python environment to enable package installation.
 
 REM Find the ._pth file
 for %%F in (python\python*._pth) do (
     set PTH_FILE=%%F
 )
-
 if not defined PTH_FILE (
     echo [ERROR] Could not find the python..._pth file in the 'python' directory.
-    echo Cannot proceed automatically.
+    pause
+    exit /b 1
+)
+
+REM Find the python*.zip file
+for %%F in (python\python*.zip) do (
+    set ZIP_FILE=%%~nxF
+)
+if not defined ZIP_FILE (
+    echo [ERROR] Could not find the python...zip file in the 'python' directory.
     pause
     exit /b 1
 )
 
 echo Found Python configuration file: %PTH_FILE%
+echo Found Python library: %ZIP_FILE%
+
 echo Backing up to %PTH_FILE%.bak
 copy "%PTH_FILE%" "%PTH_FILE%.bak" > nul
 
-echo Modifying %PTH_FILE% to enable 'pip'...
-(for /f "tokens=* delims=" %%a in ('type "%PTH_FILE%"') do (
-    set "line=%%a"
-    setlocal enabledelayedexpansion
-    if "!line!"=="#import site" (
-        echo import site
-    ) else (
-        echo !line!
-    )
-    endlocal
-)) > "%PTH_FILE%.tmp"
+echo Generating new, robust configuration for %PTH_FILE%...
+(
+    echo %ZIP_FILE%
+    echo Lib/site-packages
+    echo .
+    echo import site
+) > "%PTH_FILE%"
 
-move /y "%PTH_FILE%.tmp" "%PTH_FILE%" > nul
 echo [OK] Configuration file updated successfully.
 echo.
 
